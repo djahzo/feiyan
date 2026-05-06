@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(curl -s http://localhost:3000/api/bilibili/user)",
+      "Bash(curl -s \"https://api.bilibili.com/x/space/acc/info?mid=14636839\" -H \"User-Agent: Mozilla/5.0\" -H \"Referer: https://www.bilibili.com\")",
+      "Bash(curl -s \"https://api.bilibili.com/x/space/wbi/arc/search?mid=14636839&pn=1&ps=10\" -H \"User-Agent: Mozilla/5.0\" -H \"Referer: https://www.bilibili.com\")",
+      "Bash(curl *)",
+      "Bash(lsof -ti:3000)",
+      "Bash(xargs kill *)",
+      "Bash(netstat -ano)",
+      "Bash(findstr :3000)",
+      "Bash(taskkill *)",
+      "Bash(findstr LISTENING)",
+      "Bash(pnpm install *)",
+      "Bash(pnpm turbo *)",
+      "Bash(git init *)",
+      "Bash(git add *)"
+    ]
+  }
+}

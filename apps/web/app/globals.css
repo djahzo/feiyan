@@ -1,0 +1,5 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; }
