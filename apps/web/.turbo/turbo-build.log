@@ -2,12 +2,8 @@
 > web@0.1.0 build C:\Users\jzdai2\Desktop\feiyan\apps\web
 > next build
 
-Attention: Next.js now collects completely anonymous telemetry regarding usage.
-This information is used to shape Next.js' roadmap and prioritize features.
-You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
-https://nextjs.org/telemetry
-
   ▲ Next.js 14.2.29
+  - Environments: .env.local
 
    Creating an optimized production build ...
  ✓ Compiled successfully
@@ -22,7 +18,7 @@ https://nextjs.org/telemetry
    Collecting build traces ...
 
 Route (app)                              Size     First Load JS
-┌ ○ /                                    6.29 kB        93.4 kB
+┌ ○ /                                    5.41 kB        92.5 kB
 ├ ○ /_not-found                          873 B            88 kB
 ├ ƒ /api/bilibili/dynamics               0 B                0 B
 ├ ƒ /api/bilibili/live                   0 B                0 B
@@ -31,7 +27,7 @@ Route (app)                              Size     First Load JS
 + First Load JS shared by all            87.1 kB
   ├ chunks/818-bda5aa886e137a3c.js       31.6 kB
   ├ chunks/c56ac22f-6a455a3fcd8d5a8f.js  53.6 kB
-  └ other shared chunks (total)          1.91 kB
+  └ other shared chunks (total)          1.85 kB
 
 
 ○  (Static)   prerendered as static content

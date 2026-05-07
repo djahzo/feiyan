@@ -16,7 +16,18 @@
       "Bash(pnpm install *)",
       "Bash(pnpm turbo *)",
       "Bash(git init *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit -m 'Initial commit: Next.js monorepo with Bilibili API integration *)",
+      "Bash(git remote *)",
+      "Bash(git branch *)",
+      "Bash(git push *)",
+      "Bash(vercel *)",
+      "Bash(node *)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:greasyfork.org)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('response_data'\\)\\)\")"
     ]
   }
 }
