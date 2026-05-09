@@ -7,7 +7,7 @@ const SITE_NAME = '斐延';
 
 const CONTACT_EMAIL =
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_CONTACT_EMAIL) ||
-  'hello@example.com';
+  '2249213654@qq.com';
 
 const navLinks = [
   { href: '#intro', label: '简介' },

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { BilibiliUserInfo, BilibiliVideo, BilibiliLiveStatus } from '@/types/bilibili';
 
 const SITE_NAME = '斐延';
-const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL || 'hello@example.com';
+const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL || '2249213654@qq.com';
 
 const navLinks = [
   { href: '#intro', label: '简介' },
