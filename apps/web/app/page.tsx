@@ -1,31 +1,9 @@
 'use client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { BilibiliUserInfo, BilibiliVideo, BilibiliLiveStatus } from '@/types/bilibili';
-
-const SITE_NAME = '斐延';
-const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL || '2249213654@qq.com';
-
-const navLinks = [
-  { href: '#intro', label: '简介' },
-  { href: '#biz', label: '商务合作' },
-  { href: '#trust', label: '合作说明' },
-  { href: '#videos', label: '精选投稿' },
-  { href: '#contact', label: '联系' },
-];
-
-const DEFAULT_SIGN = '《三角洲行动》战术射击赛道内容创作：版本与枪械理解、地图与撤离节奏、搜打撤实战复盘。既做给玩家看，也方便品牌评估是否同频。';
-const heroPills = ['三角洲行动', '攻略 · 实况 · 复盘', '战术博弈', '直播 / 长线合作'];
-
-const bizBlocks = [
-  { k: '01', title: '需求简报与排期', body: '先对齐品牌目标、受众画像、内容禁忌与档期窗口；再匹配植入、定制、直播专场等形式，避免「先拍脑袋再改脚本」。' },
-  { k: '02', title: '内容共创与露出', body: '脚本、口播、画面与弹幕引导可逐条确认；长线合作可包含版本更新节点、赛事/活动联动等节奏。' },
-  { k: '03', title: '交付与复盘', body: '上线后按约定数据维度复盘；支持多轮迭代的年度框架，也接受单项目试水。' },
-];
-
-const trustPoints = [
-  { title: '社区与规则优先', body: '商业合作内容会按平台与社区规范标注，尊重玩家体验；不搞隐瞒式硬广。' },
-  { title: '可写入合同的颗粒度', body: '交付物、修改轮次、上线节点与违约条款均可前置对齐，减少口头扯皮。' },
-];
+import EdgeCalendarFloat from '@/components/EdgeCalendarFloat';
+import { DEFAULT_SITE_CONFIG } from '@/lib/site-defaults';
+import type { SiteConfig } from '@/lib/site-config-types';
 
 function fmt(n: number) {
   if (n >= 10000) return `${(n / 10000).toFixed(1)}万`;
@@ -38,6 +16,12 @@ function fmtDate(ts: number) {
 }
 
 export default function HomePage() {
+  const [cfg, setCfg] = useState<SiteConfig>(() => ({
+    ...DEFAULT_SITE_CONFIG,
+    ...(typeof process.env.NEXT_PUBLIC_CONTACT_EMAIL === 'string' && process.env.NEXT_PUBLIC_CONTACT_EMAIL
+      ? { contactEmail: process.env.NEXT_PUBLIC_CONTACT_EMAIL }
+      : {}),
+  }));
   const [showTop, setShowTop] = useState(false);
   const [userInfo, setUserInfo] = useState<BilibiliUserInfo | null>(null);
   const [live, setLive] = useState<BilibiliLiveStatus | null>(null);
@@ -67,6 +51,21 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    fetch('/api/site-config')
+      .then(r => r.json() as Promise<{ data?: SiteConfig }>)
+      .then(body => {
+        if (body?.data) {
+          setCfg(prev => ({
+            ...prev,
+            ...body.data!,
+            contactEmail: body.data!.contactEmail || prev.contactEmail,
+          }));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     const onScroll = () => setShowTop(window.scrollY > 380);
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
@@ -75,23 +74,23 @@ export default function HomePage() {
   useEffect(() => { loadData(); }, [loadData]);
 
   const spaceUrl = useMemo(() => userInfo?.mid ? `https://space.bilibili.com/${userInfo.mid}` : 'https://www.bilibili.com', [userInfo?.mid]);
-  const heroSubtitle = (userInfo?.sign?.trim()) || DEFAULT_SIGN;
+  const heroSubtitle = (userInfo?.sign?.trim()) || cfg.defaultSign;
   const faceUrl = userInfo?.face || '';
-  const displayNick = userInfo?.name || SITE_NAME;
+  const displayNick = userInfo?.name || cfg.siteName;
 
   return (
     <div className="min-h-screen bg-white text-[#333]">
       <header className="sticky top-0 z-50 border-b border-gray-100/80 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3.5 md:px-8">
           <a href="#intro" className="font-bold tracking-tight">
-            {SITE_NAME}<span className="ml-2 hidden font-normal text-[#888] sm:inline">· 商务主站</span>
+            {cfg.siteName}<span className="ml-2 hidden font-normal text-[#888] sm:inline">{cfg.headerSubtitle}</span>
           </a>
           <nav className="hidden flex-1 justify-center md:flex">
             <ul className="flex gap-6 text-sm text-[#444] lg:gap-8">
-              {navLinks.map(l => <li key={l.href}><a href={l.href} className="hover:text-[#00A1D6]">{l.label}</a></li>)}
+              {cfg.navLinks.map(l => <li key={l.href}><a href={l.href} className="hover:text-[#00A1D6]">{l.label}</a></li>)}
             </ul>
           </nav>
-          <a href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`【商务合作咨询】${SITE_NAME}`)}`}
+          <a href={`mailto:${cfg.contactEmail}?subject=${encodeURIComponent(`【商务合作咨询】${cfg.siteName}`)}`}
             className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-[#333] transition hover:border-[#00A1D6] hover:text-[#00A1D6]">
             商务询价
           </a>
@@ -118,16 +117,16 @@ export default function HomePage() {
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium tracking-wide text-[#E8B84B]/90">B站 UP 主 · {loading ? '…' : displayNick}</p>
             <h1 className="mt-4 text-[1.65rem] font-bold leading-snug text-white md:text-4xl md:leading-tight">
-              战术射击内容，<span className="text-[#E8B84B]">做给玩家与品牌</span>同频对话
+              {cfg.heroTitlePart1}<span className="text-[#E8B84B]">{cfg.heroTitleAccent}</span>{cfg.heroTitlePart2}
             </h1>
             <p className="mt-5 max-w-xl text-base leading-relaxed text-white/75">{heroSubtitle}</p>
             <div className="mt-8 flex flex-wrap gap-2">
-              {heroPills.map(p => (
+              {cfg.heroPills.map(p => (
                 <span key={p} className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-sm text-white/85">{p}</span>
               ))}
             </div>
             <div className="mt-10 flex flex-wrap items-center gap-4">
-              <a href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`【商务合作】${SITE_NAME}`)}`}
+              <a href={`mailto:${cfg.contactEmail}?subject=${encodeURIComponent(`【商务合作】${cfg.siteName}`)}`}
                 className="inline-flex rounded-lg bg-[#E8B84B] px-6 py-3 text-sm font-semibold text-black shadow-lg transition hover:brightness-110">
                 发商务邮件
               </a>
@@ -154,18 +153,18 @@ export default function HomePage() {
         <div className="mx-auto flex max-w-5xl flex-wrap justify-center gap-8 px-4 py-6 text-center text-sm text-[#555] md:justify-between md:px-8 md:text-left">
           <div><p className="text-xs uppercase tracking-wider text-[#888]">频道昵称</p><p className="mt-1 font-semibold text-[#222]">{loading ? '加载中…' : displayNick}</p></div>
           <div><p className="text-xs uppercase tracking-wider text-[#888]">公开稿件</p><p className="mt-1 font-semibold text-[#222]">{loading ? '…' : `${videoTotal || videos.length} 支`}</p></div>
-          <div><p className="text-xs uppercase tracking-wider text-[#888]">商务联络</p><p className="mt-1 font-semibold text-[#222]">邮件 1–2 个工作日内回复</p></div>
+          <div><p className="text-xs uppercase tracking-wider text-[#888]">商务联络</p><p className="mt-1 font-semibold text-[#222]">{cfg.contactBarLine}</p></div>
         </div>
       </div>
 
       <section id="biz" className="scroll-mt-20 px-4 py-20 md:px-8">
         <div className="mx-auto max-w-5xl">
           <div className="mb-12 max-w-2xl">
-            <h2 className="text-2xl font-bold md:text-3xl">商务合作怎么推进</h2>
-            <p className="mt-3 text-[#666]">面向硬件外设、游戏发行、饮料零食、电竞椅等品牌侧：可按 campaign 做单场植入，也可按版本节奏签季度框架。</p>
+            <h2 className="text-2xl font-bold md:text-3xl">{cfg.bizSectionTitle}</h2>
+            <p className="mt-3 text-[#666]">{cfg.bizSectionIntro}</p>
           </div>
           <ol className="space-y-10 border-l-2 border-gray-200 pl-8 md:pl-10">
-            {bizBlocks.map(b => (
+            {cfg.bizBlocks.map(b => (
               <li key={b.k} className="relative">
                 <span className="absolute -left-[2.125rem] top-0 flex h-8 w-8 items-center justify-center rounded-full bg-[#0A0E14] text-xs font-bold text-[#E8B84B] md:-left-[2.5rem]">{b.k}</span>
                 <h3 className="text-lg font-bold text-[#222]">{b.title}</h3>
@@ -178,10 +177,10 @@ export default function HomePage() {
 
       <section id="trust" className="scroll-mt-20 bg-[#0A0E14] px-4 py-20 md:px-8">
         <div className="mx-auto max-w-5xl">
-          <h2 className="text-2xl font-bold text-white md:text-3xl">合作说明</h2>
-          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/65">三角洲玩家圈子认「真实对局与版本理解」。主站用于让品牌方在下单前确认内容风格与合作边界。</p>
+          <h2 className="text-2xl font-bold text-white md:text-3xl">{cfg.trustSectionTitle}</h2>
+          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/65">{cfg.trustSectionIntro}</p>
           <div className="mt-10 grid gap-8 md:grid-cols-2">
-            {trustPoints.map(t => (
+            {cfg.trustPoints.map(t => (
               <div key={t.title} className="rounded-xl border border-white/10 bg-white/5 p-6">
                 <h3 className="font-semibold text-[#E8B84B]">{t.title}</h3>
                 <p className="mt-3 text-sm leading-relaxed text-white/85">{t.body}</p>
@@ -193,8 +192,8 @@ export default function HomePage() {
 
       <section id="videos" className="scroll-mt-20 px-4 py-20 md:px-8">
         <div className="mx-auto max-w-5xl">
-          <h2 className="text-center text-2xl font-bold md:text-3xl">精选投稿</h2>
-          <p className="mx-auto mt-3 max-w-xl text-center text-sm text-[#666]">以下为频道内近期公开稿件，供评估内容调性；完整列表请前往 B 站空间。</p>
+          <h2 className="text-center text-2xl font-bold md:text-3xl">{cfg.videosSectionTitle}</h2>
+          <p className="mx-auto mt-3 max-w-xl text-center text-sm text-[#666]">{cfg.videosSectionIntro}</p>
           {loading ? (
             <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
               {[1, 2, 3].map(k => (
@@ -209,8 +208,8 @@ export default function HomePage() {
             </div>
           ) : videos.length === 0 ? (
             <div className="mt-14 flex flex-col items-center rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-6 py-14 text-center">
-              <h3 className="mt-5 text-xl font-bold text-[#222]">主播去找非洲之心了</h3>
-              <p className="mt-3 max-w-md text-sm leading-relaxed text-[#666]">稿件暂时没在阵地上——刷新试试，或直达 B 站空间翻仓库。</p>
+              <h3 className="mt-5 text-xl font-bold text-[#222]">{cfg.emptyVideosTitle}</h3>
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-[#666]">{cfg.emptyVideosBody}</p>
               <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
                 <button type="button" onClick={loadData} className="rounded-lg bg-[#0A0E14] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#0A0E14]/90">刷新稿件</button>
                 {userInfo?.mid && <a href={spaceUrl} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-[#333] transition hover:bg-gray-50">去 B 站空间</a>}
@@ -252,13 +251,13 @@ export default function HomePage() {
         <div className="mx-auto max-w-5xl px-4 py-14 md:px-8">
           <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="font-semibold text-[#222]">{SITE_NAME} · 商务主站</p>
-              <p className="mt-1 text-sm text-[#666]">《三角洲行动》等内容向品牌合作 · 询价请邮件并注明品牌与大致档期</p>
+              <p className="font-semibold text-[#222]">{cfg.siteName}{cfg.headerSubtitle}</p>
+              <p className="mt-1 text-sm text-[#666]">{cfg.footerTagline}</p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <a href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`【商务合作】${SITE_NAME}`)}`}
+              <a href={`mailto:${cfg.contactEmail}?subject=${encodeURIComponent(`【商务合作】${cfg.siteName}`)}`}
                 className="inline-flex w-fit items-center rounded-lg bg-[#00A1D6] px-5 py-2.5 text-sm font-medium text-white hover:opacity-90">
-                {CONTACT_EMAIL}
+                {cfg.contactEmail}
               </a>
               {userInfo?.mid && (
                 <a href={spaceUrl} target="_blank" rel="noopener noreferrer"
@@ -268,13 +267,26 @@ export default function HomePage() {
               )}
             </div>
           </div>
-          <p className="mt-10 text-center text-xs text-[#999]">© {new Date().getFullYear()} {SITE_NAME} · 本站为展示用途，合作以书面确认与平台规则为准</p>
+          <p className="mt-10 text-center text-xs text-[#999]">© {new Date().getFullYear()} {cfg.siteName} · {cfg.footerNote}</p>
+          {cfg.footerIcpText.trim() !== '' && (
+            <p className="mt-2 text-center text-xs text-[#999]">
+              <a
+                href="https://beian.miit.gov.cn/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-[#00A1D6] hover:underline">
+                {cfg.footerIcpText}
+              </a>
+            </p>
+          )}
         </div>
       </footer>
 
+      <EdgeCalendarFloat />
+
       {showTop && (
         <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="fixed bottom-8 right-5 z-50 rounded-full border border-gray-200 bg-white p-3 text-[#444] shadow-lg hover:bg-gray-50"
+          className="fixed bottom-8 right-5 z-50 rounded-full border border-gray-200 bg-white p-3 text-[#444] shadow-lg hover:bg-gray-50 md:right-6"
           aria-label="回到顶部">
           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />

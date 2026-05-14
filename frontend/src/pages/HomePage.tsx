@@ -94,11 +94,11 @@ const HomePage: React.FC = () => {
           return null;
         }),
         bilibiliApi.getLiveStatus().catch(() => null),
-        bilibiliApi.getVideoList(1, 9).catch(() => ({ videos: [] as BilibiliVideo[], total: 0 })),
+        bilibiliApi.getVideoList(1, 6).catch(() => ({ videos: [] as BilibiliVideo[], total: 0 })),
       ]);
       setUserInfo(u);
       setLive(l);
-      setVideos(v.videos || []);
+      setVideos((v.videos || []).slice(0, 6));
       setVideoTotal(v.total ?? (v.videos?.length ?? 0));
     } catch {
       setLoadError('接口暂不可用，请确认已启动后端并配置 BILIBILI_UID');
@@ -303,7 +303,7 @@ const HomePage: React.FC = () => {
           </p>
           {loading ? (
             <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3].map((k) => (
+              {[1, 2, 3, 4, 5, 6].map((k) => (
                 <div
                   key={k}
                   className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm"
@@ -389,19 +389,17 @@ const HomePage: React.FC = () => {
                   </div>
                 </article>
               ))}
+              <div className="col-span-full mt-2 flex justify-center sm:col-span-2 lg:col-span-3">
+                <a
+                  href={spaceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-8 py-3 text-sm font-semibold text-[#333] shadow-sm transition hover:border-brand-link hover:bg-gray-50 hover:text-brand-link"
+                >
+                  前往B站主页
+                </a>
+              </div>
             </div>
-          )}
-          {userInfo?.mid && (
-            <p className="mt-10 text-center">
-              <a
-                href={spaceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm font-medium text-brand-link hover:underline"
-              >
-                进入 B 站空间看全部稿件 →
-              </a>
-            </p>
           )}
         </div>
       </section>

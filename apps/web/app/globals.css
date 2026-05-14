@@ -3,3 +3,16 @@
 @tailwind utilities;
 
 * { font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+
+@layer utilities {
+  /** 仍可滚动，隐藏滚动条（托管待办等内嵌滚动区） */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+}
