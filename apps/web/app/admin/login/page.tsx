@@ -2,7 +2,7 @@
 
 import { FormEvent, Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 
 /** 登录成功后的跳转：仅允许站内 /admin 路径，防止开放重定向与路径穿越 */
 function safeAdminNext(raw: string | null): string {
@@ -18,7 +18,6 @@ function safeAdminNext(raw: string | null): string {
 }
 
 function AdminLoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -51,6 +50,7 @@ function AdminLoginForm() {
       const res = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ username, password }),
       });
       const data = (await res.json()) as { error?: string; code?: string };
@@ -59,8 +59,7 @@ function AdminLoginForm() {
         return;
       }
       const next = safeAdminNext(searchParams.get('next'));
-      router.replace(next);
-      router.refresh();
+      window.location.assign(next);
     } catch {
       setError('网络错误');
     } finally {

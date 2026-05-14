@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { findAdminByUsername, getAdminCount, insertFirstAdminIfEmpty } from '@/lib/db';
-import { ADMIN_SESSION_COOKIE, signAdminSession } from '@/lib/admin-session';
+import { ADMIN_SESSION_COOKIE, adminSessionCookieSecure, signAdminSession } from '@/lib/admin-session';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
     res.cookies.set(ADMIN_SESSION_COOKIE, token, {
       httpOnly: true,
       sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      secure: adminSessionCookieSecure(req),
       path: '/',
       maxAge: 60 * 60 * 24 * 7,
     });

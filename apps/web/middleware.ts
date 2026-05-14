@@ -17,7 +17,7 @@ export async function middleware(req: NextRequest) {
   const key = getSecretBytes();
   if (!key) {
     return new NextResponse(
-      '请配置环境变量 ADMIN_SESSION_SECRET（至少 16 位字符），并重启开发服务器。',
+      '请配置环境变量 ADMIN_SESSION_SECRET（至少 16 位字符），并重启应用进程（如 pm2 restart）。',
       { status: 500, headers: { 'content-type': 'text/plain; charset=utf-8' } },
     );
   }

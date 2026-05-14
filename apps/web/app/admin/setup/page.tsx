@@ -2,12 +2,10 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 
 type Gate = 'loading' | 'redirect-login' | 'status-failed' | 'form';
 
 export default function AdminSetupPage() {
-  const router = useRouter();
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [gate, setGate] = useState<Gate>('loading');
@@ -27,7 +25,7 @@ export default function AdminSetupPage() {
         }
         if (!j.needsSetup) {
           setGate('redirect-login');
-          router.replace('/admin/login');
+          window.location.assign('/admin/login');
           return;
         }
         setGate('form');
@@ -41,7 +39,7 @@ export default function AdminSetupPage() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, []);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -55,6 +53,7 @@ export default function AdminSetupPage() {
       const res = await fetch('/api/admin/bootstrap', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ username, password, passwordConfirm }),
       });
       const data = (await res.json()) as { error?: string };
@@ -62,8 +61,7 @@ export default function AdminSetupPage() {
         setFormError(data.error || '初始化失败');
         return;
       }
-      router.replace('/admin/site');
-      router.refresh();
+      window.location.assign('/admin/site');
     } catch {
       setFormError('网络错误');
     } finally {
