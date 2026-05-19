@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchAdminCaptainsList } from '@/lib/admin-captains-list';
-import { T9_GROUP_KEYS, T9_GROUP_LABEL, t9GroupKeyForDisplayName } from '@/lib/captain-t9-group';
+import { T9_GROUP_KEYS, T9_GROUP_LABEL, preloadPinyinPro, t9GroupKeyForDisplayName } from '@/lib/captain-t9-group';
 import type { CaptainApiDto } from '@/lib/captain-dto';
 import { captainAvatarImgReferrerPolicy, captainAvatarImgSrc } from '@/lib/captain-avatar-placeholder';
 import { captainPoolDisplayLine, captainScheduleName } from '@/lib/captain-schedule-name';
 import { addDaysIso, analyzeRoleScheduleConflict } from '@/lib/hosting-todo-schedule';
 import { isoDatesCurrentWeek, todayIsoDate, weekdayLabel } from '@/lib/hosting-week-utils';
 import { DEFAULT_HOST_TYPE, HOST_TYPE_LABEL, HOST_TYPES, isHostType, type HostType } from '@/lib/hosting-types';
+import { compareZhDisplayName, dataTransferTypeList } from '@/lib/locale-compare';
 
 /** 从舰长池拖入新建条目时的默认参数（生成后可在卡片上改托管类型 / 卡任务） */
 const DRAG_IN_HOST_TYPE = DEFAULT_HOST_TYPE;
@@ -27,11 +28,59 @@ export type HostingTodoDto = {
 
 /** 左侧大数字日 + 年月行 */
 function parseMissionDate(iso: string) {
+  if (!iso || typeof iso !== 'string') {
+    return { dayNum: '--', ym: '', wd: '' };
+  }
   const [y, m, day] = iso.split('-').map(Number);
   return {
     dayNum: day ? String(day).padStart(2, '0') : '--',
     ym: y && m ? `${y}.${String(m).padStart(2, '0')}` : '',
     wd: weekdayLabel(iso),
+  };
+}
+
+function normalizeHostingTodo(raw: unknown): HostingTodoDto | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const id = Number(o.id);
+  const todoDate = typeof o.todoDate === 'string' ? o.todoDate.trim() : '';
+  const roleName = typeof o.roleName === 'string' ? o.roleName : '';
+  if (!Number.isFinite(id) || !todoDate) return null;
+  return {
+    id,
+    todoDate,
+    roleName,
+    hostType: typeof o.hostType === 'string' ? o.hostType : DEFAULT_HOST_TYPE,
+    stuckTask: Boolean(o.stuckTask),
+    sortOrder: Number(o.sortOrder) || 0,
+    createdAt: Number(o.createdAt) || 0,
+    updatedAt: Number(o.updatedAt) || 0,
+  };
+}
+
+function normalizeCaptain(raw: unknown): CaptainApiDto | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const id = Number(o.id);
+  if (!Number.isFinite(id)) return null;
+  return {
+    id,
+    uid: typeof o.uid === 'string' ? o.uid : '',
+    idName: typeof o.idName === 'string' ? o.idName : null,
+    remarkName: typeof o.remarkName === 'string' ? o.remarkName : null,
+    note: typeof o.note === 'string' ? o.note : null,
+    wechatRemark: typeof o.wechatRemark === 'string' ? o.wechatRemark : null,
+    gameIdRemark: typeof o.gameIdRemark === 'string' ? o.gameIdRemark : null,
+    shipTier: typeof o.shipTier === 'string' ? o.shipTier : null,
+    shipTierLabel: typeof o.shipTierLabel === 'string' ? o.shipTierLabel : null,
+    shippedAt: o.shippedAt == null ? null : Number(o.shippedAt),
+    expiresAt: o.expiresAt == null ? null : Number(o.expiresAt),
+    expireStatus:
+      o.expireStatus === 'active' || o.expireStatus === 'expired' || o.expireStatus === 'none' ? o.expireStatus : 'none',
+    daysRemaining: o.daysRemaining == null ? null : Number(o.daysRemaining),
+    avatarUrl: typeof o.avatarUrl === 'string' ? o.avatarUrl : null,
+    createdAt: Number(o.createdAt) || 0,
+    updatedAt: Number(o.updatedAt) || 0,
   };
 }
 
@@ -113,6 +162,19 @@ export default function HostingTodoBoard() {
   const [collapsedDayQueues, setCollapsedDayQueues] = useState<Set<string>>(() => new Set());
   /** 舰长池九键分组收起：分组 key 在 Set 内表示已收起 */
   const [collapsedCaptainGroups, setCollapsedCaptainGroups] = useState<Set<number>>(() => new Set());
+  const [pinyinReady, setPinyinReady] = useState<((text: string, options: { pattern: 'first'; toneType: 'none' }) => string) | null>(
+    null,
+  );
+
+  useEffect(() => {
+    let active = true;
+    void preloadPinyinPro().then(fn => {
+      if (active && fn) setPinyinReady(fn);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;
@@ -126,14 +188,21 @@ export default function HostingTodoBoard() {
         setRows([]);
         setLeaveDates([]);
       } else {
-        setRows(todoBody.data ?? []);
-        setLeaveDates(Array.isArray(todoBody.leaveDates) ? todoBody.leaveDates : []);
+        const todos = Array.isArray(todoBody.data)
+          ? todoBody.data.map(normalizeHostingTodo).filter((r): r is HostingTodoDto => r != null)
+          : [];
+        setRows(todos);
+        setLeaveDates(
+          Array.isArray(todoBody.leaveDates)
+            ? todoBody.leaveDates.filter((d): d is string => typeof d === 'string' && d.length > 0)
+            : [],
+        );
       }
       if (!capR.ok) {
         if (todoRes.ok) setError(capR.error);
         setCaptains([]);
       } else {
-        setCaptains(capR.data);
+        setCaptains(capR.data.map(normalizeCaptain).filter((c): c is CaptainApiDto => c != null));
       }
     } catch {
       setError('网络错误');
@@ -238,18 +307,29 @@ export default function HostingTodoBoard() {
   }, [captains, captainFilter]);
 
   const captainsByT9 = useMemo(() => {
-    const map = new Map<number, CaptainApiDto[]>();
-    for (const k of T9_GROUP_KEYS) map.set(k, []);
-    for (const c of filteredCaptains) {
-      const label = captainScheduleName(c);
-      const g = t9GroupKeyForDisplayName(label);
-      map.get(g)!.push(c);
+    try {
+      const map = new Map<number, CaptainApiDto[]>();
+      for (const k of T9_GROUP_KEYS) map.set(k, []);
+      for (const c of filteredCaptains) {
+        if (!c) continue;
+        const label = captainScheduleName(c);
+        const g = t9GroupKeyForDisplayName(label, pinyinReady);
+        const bucket = map.get(g);
+        if (bucket) bucket.push(c);
+        else map.get(0)!.push(c);
+      }
+      for (const list of map.values()) {
+        list.sort((a, b) => compareZhDisplayName(captainScheduleName(a), captainScheduleName(b)));
+      }
+      return map;
+    } catch (e) {
+      console.error('[HostingTodoBoard] captainsByT9', e);
+      const fallback = new Map<number, CaptainApiDto[]>();
+      for (const k of T9_GROUP_KEYS) fallback.set(k, []);
+      fallback.set(0, [...filteredCaptains]);
+      return fallback;
     }
-    for (const list of map.values()) {
-      list.sort((a, b) => captainScheduleName(a).localeCompare(captainScheduleName(b), 'zh-Hans-CN'));
-    }
-    return map;
-  }, [filteredCaptains]);
+  }, [filteredCaptains, pinyinReady]);
 
   async function persistReorder(todoDate: string, orderedIds: number[]) {
     const res = await fetch('/api/admin/hosting-todos/reorder', {
@@ -463,7 +543,7 @@ export default function HostingTodoBoard() {
   }
 
   function pickDropEffect(e: React.DragEvent): 'copy' | 'move' {
-    const types = [...e.dataTransfer.types];
+    const types = dataTransferTypeList(e.dataTransfer);
     if (types.includes(MIME_CAPTAIN)) return 'copy';
     return 'move';
   }
@@ -912,7 +992,7 @@ export default function HostingTodoBoard() {
                                         <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-[#2a3344] bg-[#0a0d12]">
                                           {c.avatarUrl ? (
                                             <img
-                                              src={captainAvatarImgSrc(c.avatarUrl, c.updatedAt)}
+                                              src={captainAvatarImgSrc(c.avatarUrl, c.updatedAt ?? 0)}
                                               alt=""
                                               referrerPolicy={captainAvatarImgReferrerPolicy(c.avatarUrl)}
                                               className="h-full w-full object-cover"

@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { BilibiliUserInfo, BilibiliVideo, BilibiliLiveStatus } from '@/types/bilibili';
+import ContactEmailAction from '@/components/ContactEmailAction';
 import EdgeCalendarFloat from '@/components/EdgeCalendarFloat';
 import { DEFAULT_SITE_CONFIG } from '@/lib/site-defaults';
 import type { SiteConfig } from '@/lib/site-config-types';
@@ -90,10 +91,11 @@ export default function HomePage() {
               {cfg.navLinks.map(l => <li key={l.href}><a href={l.href} className="hover:text-[#00A1D6]">{l.label}</a></li>)}
             </ul>
           </nav>
-          <a href={`mailto:${cfg.contactEmail}?subject=${encodeURIComponent(`【商务合作咨询】${cfg.siteName}`)}`}
+          <ContactEmailAction
+            email={cfg.contactEmail}
             className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-[#333] transition hover:border-[#00A1D6] hover:text-[#00A1D6]">
             商务询价
-          </a>
+          </ContactEmailAction>
         </div>
       </header>
 
@@ -126,10 +128,11 @@ export default function HomePage() {
               ))}
             </div>
             <div className="mt-10 flex flex-wrap items-center gap-4">
-              <a href={`mailto:${cfg.contactEmail}?subject=${encodeURIComponent(`【商务合作】${cfg.siteName}`)}`}
+              <ContactEmailAction
+                email={cfg.contactEmail}
                 className="inline-flex rounded-lg bg-[#E8B84B] px-6 py-3 text-sm font-semibold text-black shadow-lg transition hover:brightness-110">
                 发商务邮件
-              </a>
+              </ContactEmailAction>
               <a href={spaceUrl} target="_blank" rel="noopener noreferrer"
                 className="text-sm font-medium text-white/80 underline-offset-4 hover:text-white hover:underline">
                 B 站频道
@@ -255,10 +258,11 @@ export default function HomePage() {
               <p className="mt-1 text-sm text-[#666]">{cfg.footerTagline}</p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <a href={`mailto:${cfg.contactEmail}?subject=${encodeURIComponent(`【商务合作】${cfg.siteName}`)}`}
+              <ContactEmailAction
+                email={cfg.contactEmail}
                 className="inline-flex w-fit items-center rounded-lg bg-[#00A1D6] px-5 py-2.5 text-sm font-medium text-white hover:opacity-90">
                 {cfg.contactEmail}
-              </a>
+              </ContactEmailAction>
               {userInfo?.mid && (
                 <a href={spaceUrl} target="_blank" rel="noopener noreferrer"
                   className="inline-flex w-fit items-center rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-[#333] hover:bg-gray-50">
@@ -286,7 +290,7 @@ export default function HomePage() {
 
       {showTop && (
         <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="fixed bottom-8 right-5 z-50 rounded-full border border-gray-200 bg-white p-3 text-[#444] shadow-lg hover:bg-gray-50 md:right-6"
+          className="fixed bottom-8 right-5 z-40 rounded-full border border-gray-200 bg-white p-3 text-[#444] shadow-lg hover:bg-gray-50 max-md:bottom-[5.25rem] md:right-6"
           aria-label="回到顶部">
           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />

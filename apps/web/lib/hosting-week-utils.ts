@@ -4,9 +4,21 @@ function pad(n: number) {
   return String(n).padStart(2, '0');
 }
 
-export function todayIsoDate() {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+/** 业务日历统一用上海时区，避免服务端 UTC 与本地时区不一致 */
+export const BUSINESS_TIME_ZONE = 'Asia/Shanghai';
+
+export function todayIsoDate(timeZone: string = BUSINESS_TIME_ZONE) {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+  } catch {
+    const d = new Date();
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
 }
 
 export function weekdayLabel(iso: string) {
