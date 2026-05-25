@@ -180,7 +180,7 @@ export default function HostingTodoBoard() {
   useEffect(() => {
     let active = true;
     void preloadPinyinPro().then(fn => {
-      if (active && fn) setPinyinReady(fn);
+      if (active && fn) setPinyinReady(() => fn);
     });
     return () => {
       active = false;
