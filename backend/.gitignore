@@ -1,5 +1,24 @@
+﻿# 依赖
 node_modules/
+
+# 构建输出
 dist/
-.env
+
+# 日志文件
+logs/
 *.log
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 操作系统
 .DS_Store
+Thumbs.db

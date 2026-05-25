@@ -5,6 +5,7 @@ import {
   BilibiliDynamicResponse,
   BilibiliLiveStatusResponse
 } from '../types/bilibili';
+import logger from '../utils/logger';
 
 const BILIBILI_API_BASE = 'https://api.bilibili.com';
 const BILIBILI_LIVE_API = 'https://api.live.bilibili.com';
@@ -28,6 +29,7 @@ interface CacheItem {
 
 const cache = new Map<string, CacheItem>();
 const CACHE_TTL = 5 * 60 * 1000; // 5分钟缓存
+const MAX_CACHE_SIZE = 100; // 最大缓存条目数
 
 function getCache(key: string): any | null {
   const item = cache.get(key);
@@ -40,7 +42,24 @@ function getCache(key: string): any | null {
 
 function setCache(key: string, data: any): void {
   cache.set(key, { data, timestamp: Date.now() });
+
+  // 如果缓存超过最大限制，清理最旧的条目
+  if (cache.size > MAX_CACHE_SIZE) {
+    const oldestKey = cache.keys().next().value;
+    cache.delete(oldestKey);
+  }
 }
+
+// 定期清理过期缓存（每10分钟）
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, item] of cache.entries()) {
+    if (now - item.timestamp >= CACHE_TTL) {
+      cache.delete(key);
+    }
+  }
+  logger.debug(`缓存清理完成，当前缓存条目数: ${cache.size}`);
+}, 10 * 60 * 1000);
 
 export class BilibiliService {
   private uid: string;
@@ -66,7 +85,6 @@ export class BilibiliService {
     const cacheKey = `user_${this.uid}`;
     const cached = getCache(cacheKey);
     if (cached) {
-      console.log('从缓存获取用户信息');
       return cached;
     }
 
@@ -90,7 +108,7 @@ export class BilibiliService {
 
       throw new Error(response.data.message || '获取用户信息失败');
     } catch (error: any) {
-      console.error('获取用户信息失败:', error.message);
+      logger.error('获取用户信息失败:', error.message);
       throw new Error('获取用户信息失败，请稍后重试');
     }
   }
@@ -100,7 +118,6 @@ export class BilibiliService {
     const cacheKey = `live_${this.uid}`;
     const cached = getCache(cacheKey);
     if (cached) {
-      console.log('从缓存获取开播状态');
       return cached;
     }
 
@@ -126,13 +143,12 @@ export class BilibiliService {
           url: liveInfo?.room_id ? `https://live.bilibili.com/${liveInfo.room_id}` : ''
         };
         setCache(cacheKey, status);
-        console.log('开播状态:', status);
         return status;
       }
 
       return { live_status: 0, room_id: 0, title: '', cover: '', url: '' };
     } catch (error: any) {
-      console.error('获取开播状态失败:', error.message);
+      logger.error('获取开播状态失败:', error.message);
       return { live_status: 0, room_id: 0, title: '', cover: '', url: '' };
     }
   }
@@ -142,7 +158,6 @@ export class BilibiliService {
     const cacheKey = `videos_${this.uid}_${page}_${pageSize}`;
     const cached = getCache(cacheKey);
     if (cached) {
-      console.log('从缓存获取视频列表');
       return cached;
     }
 
@@ -170,13 +185,12 @@ export class BilibiliService {
           total: response.data.data.page?.count || 0
         };
         setCache(cacheKey, result);
-        console.log(`获取到 ${result.videos.length} 个视频`);
         return result;
       }
 
       throw new Error(response.data.message || '视频列表格式错误');
     } catch (error: any) {
-      console.error('获取视频列表失败:', error.message);
+      logger.error('获取视频列表失败:', error.message);
       return { videos: [], total: 0 };
     }
   }
@@ -186,7 +200,6 @@ export class BilibiliService {
     const cacheKey = `dynamics_${this.uid}`;
     const cached = getCache(cacheKey);
     if (cached) {
-      console.log('从缓存获取动态列表');
       return cached;
     }
 
@@ -208,10 +221,10 @@ export class BilibiliService {
         return items;
       }
 
-      console.warn('动态接口返回错误，可能需要登录');
+      logger.warn('动态接口返回错误，可能需要登录');
       return [];
     } catch (error) {
-      console.error('获取动态列表失败:', error);
+      logger.error('获取动态列表失败:', error);
       return [];
     }
   }

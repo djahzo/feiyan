@@ -2,6 +2,7 @@ import express, { Application } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { createBilibiliRoutes } from './routes/bilibili.routes';
+import logger from './utils/logger';
 
 // 加载环境变量
 dotenv.config();
@@ -27,7 +28,7 @@ app.get('/health', (req, res) => {
 if (BILIBILI_UID) {
   app.use('/api/bilibili', createBilibiliRoutes(BILIBILI_UID));
 } else {
-  console.warn('警告: 未设置BILIBILI_UID环境变量');
+  logger.warn('警告: 未设置BILIBILI_UID环境变量');
 }
 
 // 404处理
@@ -37,8 +38,8 @@ app.use((req, res) => {
 
 // 启动服务器
 app.listen(PORT, () => {
-  console.log(`🚀 服务器运行在 http://localhost:${PORT}`);
-  console.log(`📺 B站UID: ${BILIBILI_UID || '未设置'}`);
+  logger.info(`🚀 服务器运行在 http://localhost:${PORT}`);
+  logger.info(`📺 B站UID: ${BILIBILI_UID || '未设置'}`);
 });
 
 export default app;
