@@ -1,16 +1,27 @@
 import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { captainAvatarUrlForPublicSite, captainRowToDto, type CaptainApiDto } from '@/lib/captain-dto';
 import { captainScheduleName } from '@/lib/captain-schedule-name';
 import { listCaptains, listHostingLeaveDates, listHostingTodos } from '@/lib/db';
 import { DEFAULT_HOST_TYPE, isHostType } from '@/lib/hosting-types';
-import { isoDatesCurrentWeek, todayIsoDate } from '@/lib/hosting-week-utils';
+import {
+  isValidIsoDate,
+  isoDatesCurrentWeek,
+  mondayIsoOfWeekContaining,
+  todayIsoDate,
+} from '@/lib/hosting-week-utils';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const weekDates = isoDatesCurrentWeek(todayIsoDate());
+    const url = new URL(req.url);
+    const weekStartParam = url.searchParams.get('weekStart');
+    const baseIso = isValidIsoDate(weekStartParam ?? '')
+      ? mondayIsoOfWeekContaining(weekStartParam!)
+      : todayIsoDate();
+    const weekDates = isoDatesCurrentWeek(baseIso);
     const set = new Set(weekDates);
     const [rows, capRows, leaveAll] = await Promise.all([listHostingTodos(), listCaptains(), listHostingLeaveDates()]);
     const captains = capRows.map(captainRowToDto);

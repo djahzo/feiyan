@@ -7,7 +7,14 @@ import type { CaptainApiDto } from '@/lib/captain-dto';
 import { captainAvatarImgReferrerPolicy, captainAvatarImgSrc } from '@/lib/captain-avatar-placeholder';
 import { captainPoolDisplayLine, captainScheduleName } from '@/lib/captain-schedule-name';
 import { addDaysIso, analyzeRoleScheduleConflict } from '@/lib/hosting-todo-schedule';
-import { isoDatesCurrentWeek, todayIsoDate, weekdayLabel } from '@/lib/hosting-week-utils';
+import {
+  isoDatesCurrentWeek,
+  mondayIsoOfWeekContaining,
+  monthCalendarGrid,
+  parseIsoDateParts,
+  todayIsoDate,
+  weekdayLabel,
+} from '@/lib/hosting-week-utils';
 import { DEFAULT_HOST_TYPE, HOST_TYPE_LABEL, HOST_TYPES, isHostType, type HostType } from '@/lib/hosting-types';
 import { compareZhDisplayName, dataTransferTypeList } from '@/lib/locale-compare';
 
@@ -158,6 +165,10 @@ export default function HostingTodoBoard() {
   const [leaveDialogDate, setLeaveDialogDate] = useState<string | null>(null);
   const [scheduleOpen, setScheduleOpen] = useState(true);
   const [poolOpen, setPoolOpen] = useState(true);
+  /** 当前展示周的周一（ISO 日期）；默认"今天所在周" */
+  const [weekStart, setWeekStart] = useState<string>(() => mondayIsoOfWeekContaining(todayIsoDate()));
+  /** 年视图弹窗：null 表示关闭，数字表示打开时使用的年份 */
+  const [yearViewOpen, setYearViewOpen] = useState<number | null>(null);
   /** 当日「当日队列」正文收起：date 在 Set 内表示已收起 */
   const [collapsedDayQueues, setCollapsedDayQueues] = useState<Set<string>>(() => new Set());
   /** 舰长池九键分组收起：分组 key 在 Set 内表示已收起 */
@@ -277,8 +288,24 @@ export default function HostingTodoBoard() {
     return m;
   }, [rows]);
 
-  /** 仅展示「今天」所在自然周（周一至周日） */
-  const displayDates = useMemo(() => isoDatesCurrentWeek(todayIsoDate()), [rows]);
+  /** 跟随 weekStart 计算展示周（周一至周日） */
+  const displayDates = useMemo(() => isoDatesCurrentWeek(weekStart), [weekStart]);
+  const todayIso = todayIsoDate();
+  const isCurrentWeek = displayDates.includes(todayIso);
+  const weekRangeLabel = useMemo(() => {
+    const first = displayDates[0];
+    const last = displayDates[6];
+    if (!first || !last) return '';
+    const fp = parseIsoDateParts(first);
+    const lp = parseIsoDateParts(last);
+    if (fp.year === lp.year && fp.month === lp.month) {
+      return `${fp.year}.${String(fp.month).padStart(2, '0')}.${String(fp.day).padStart(2, '0')} – ${String(lp.day).padStart(2, '0')}`;
+    }
+    if (fp.year === lp.year) {
+      return `${fp.year}.${String(fp.month).padStart(2, '0')}.${String(fp.day).padStart(2, '0')} – ${String(lp.month).padStart(2, '0')}.${String(lp.day).padStart(2, '0')}`;
+    }
+    return `${first} – ${last}`;
+  }, [displayDates]);
 
   const leaveSet = useMemo(() => new Set(leaveDates), [leaveDates]);
 
@@ -770,19 +797,57 @@ export default function HostingTodoBoard() {
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden lg:flex-row lg:gap-0">
             {/* 任务列表：本周排期 + 当日队列 */}
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:pr-4">
-              <button
-                type="button"
-                className={`mb-1 flex shrink-0 items-center justify-between gap-2 rounded-md border border-[#c8aa6e]/25 px-3 py-2.5 text-left transition hover:border-[#c8aa6e]/45 ${th.panel}`}
-                onClick={() => setScheduleOpen(o => !o)}
-                aria-expanded={scheduleOpen}>
-                <span className={`font-mono text-xs font-semibold uppercase tracking-[0.14em] ${th.gold}`}>任务列表 · 本周排期</span>
-                <CollapseChevron open={scheduleOpen} />
-              </button>
+              <div
+                className={`mb-1 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-md border border-[#c8aa6e]/25 px-3 py-2 ${th.panel}`}>
+                <button
+                  type="button"
+                  className="flex min-w-0 items-center gap-2 rounded px-1 py-1 text-left transition hover:opacity-90"
+                  onClick={() => setScheduleOpen(o => !o)}
+                  aria-expanded={scheduleOpen}>
+                  <CollapseChevron open={scheduleOpen} />
+                  <span className={`truncate font-mono text-xs font-semibold uppercase tracking-[0.14em] ${th.gold}`}>
+                    任务列表 · 排期
+                  </span>
+                </button>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    className={`${th.btnGhost} px-2 py-1 text-[11px]`}
+                    onClick={() => setWeekStart(prev => addDaysIso(prev, -7))}
+                    title="上一周">
+                    〈 上周
+                  </button>
+                  <button
+                    type="button"
+                    className={`${th.btnGhost} px-2 py-1 text-[11px] ${isCurrentWeek ? 'opacity-50' : ''}`}
+                    disabled={isCurrentWeek}
+                    onClick={() => setWeekStart(mondayIsoOfWeekContaining(todayIsoDate()))}
+                    title="回到今天所在周">
+                    今天
+                  </button>
+                  <button
+                    type="button"
+                    className={`${th.btnGhost} px-2 py-1 text-[11px]`}
+                    onClick={() => setWeekStart(prev => addDaysIso(prev, 7))}
+                    title="下一周">
+                    下周 〉
+                  </button>
+                  <span className={`mx-1 hidden font-mono text-[11px] sm:inline ${th.muted}`}>{weekRangeLabel}</span>
+                  <button
+                    type="button"
+                    className={`${th.btn} px-2.5 py-1 text-[11px]`}
+                    onClick={() => setYearViewOpen(parseIsoDateParts(weekStart).year)}
+                    title="按月/年浏览">
+                    年视图
+                  </button>
+                </div>
+              </div>
               {scheduleOpen ? (
                 <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain pr-0">
                   <div className="w-full max-w-5xl xl:max-w-6xl">
                     <p className={`mb-3 font-mono text-xs uppercase tracking-[0.12em] ${th.muted}`}>
-                      本周排期（周一至周日）· 红框为本周最后一天 · 左侧每日下方可标记请假，主页预案该日红框显示已请假
+                      <span className="sm:hidden">{weekRangeLabel} · </span>
+                      {isCurrentWeek ? '本周排期' : '所选周排期'}（周一至周日）· 红框为本周最后一天 · 左侧每日下方可标记请假，主页预案该日红框显示已请假
                     </p>
                     {displayDates.map((date: string, idx: number) => {
                       const list = byDate.get(date) ?? [];
@@ -1055,6 +1120,183 @@ export default function HostingTodoBoard() {
           </div>
         </div>
       ) : null}
+
+      {yearViewOpen !== null ? (
+        <YearCalendarOverlay
+          year={yearViewOpen}
+          rows={rows}
+          leaveDates={leaveDates}
+          todayIso={todayIso}
+          activeWeekStart={weekStart}
+          onChangeYear={y => setYearViewOpen(y)}
+          onPickWeek={iso => {
+            setWeekStart(mondayIsoOfWeekContaining(iso));
+            setYearViewOpen(null);
+          }}
+          onClose={() => setYearViewOpen(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function YearCalendarOverlay({
+  year,
+  rows,
+  leaveDates,
+  todayIso,
+  activeWeekStart,
+  onChangeYear,
+  onPickWeek,
+  onClose,
+}: {
+  year: number;
+  rows: HostingTodoDto[];
+  leaveDates: string[];
+  todayIso: string;
+  activeWeekStart: string;
+  onChangeYear: (y: number) => void;
+  onPickWeek: (iso: string) => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const countByDate = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of rows) m.set(r.todoDate, (m.get(r.todoDate) ?? 0) + 1);
+    return m;
+  }, [rows]);
+  const leaveSet = useMemo(() => new Set(leaveDates), [leaveDates]);
+
+  const activeWeek = useMemo(() => new Set(isoDatesCurrentWeek(activeWeekStart)), [activeWeekStart]);
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-label="关闭年视图"
+        className="fixed inset-0 z-[150] cursor-default bg-black/65 backdrop-blur-[1px]"
+        onClick={onClose}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="按月/年浏览排期"
+        className={`fixed left-1/2 top-1/2 z-[151] flex max-h-[88vh] w-[min(94vw,1080px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border ${th.line} ${th.panel} shadow-2xl`}>
+        <div className={`flex shrink-0 items-center justify-between gap-3 border-b ${th.line} px-4 py-3`}>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className={`${th.btnGhost} px-2 py-1 text-xs`}
+              onClick={() => onChangeYear(year - 1)}
+              title="上一年">
+              〈
+            </button>
+            <span className={`font-mono text-base font-semibold ${th.gold}`}>{year} 年</span>
+            <button
+              type="button"
+              className={`${th.btnGhost} px-2 py-1 text-xs`}
+              onClick={() => onChangeYear(year + 1)}
+              title="下一年">
+              〉
+            </button>
+            <button
+              type="button"
+              className={`${th.btnGhost} ml-1 px-2 py-1 text-xs`}
+              onClick={() => onChangeYear(parseIsoDateParts(todayIso).year)}>
+              本年
+            </button>
+          </div>
+          <button type="button" className={`${th.btnGhost} px-2 py-1 text-xs`} onClick={onClose}>
+            关闭
+          </button>
+        </div>
+
+        <div className="grid min-h-0 flex-1 grid-cols-2 gap-3 overflow-y-auto p-4 sm:grid-cols-3 lg:grid-cols-4">
+          {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
+            <YearMiniMonth
+              key={month}
+              year={year}
+              month={month}
+              countByDate={countByDate}
+              leaveSet={leaveSet}
+              todayIso={todayIso}
+              activeWeek={activeWeek}
+              onPick={onPickWeek}
+            />
+          ))}
+        </div>
+
+        <p className={`shrink-0 border-t ${th.line} px-4 py-2 text-center text-[11px] ${th.muted}`}>
+          点击任意一天 · 跳到该日所在周 · 黄圈=今日 · 金色背景=有任务 · 红下划线=请假
+        </p>
+      </div>
+    </>
+  );
+}
+
+function YearMiniMonth({
+  year,
+  month,
+  countByDate,
+  leaveSet,
+  todayIso,
+  activeWeek,
+  onPick,
+}: {
+  year: number;
+  month: number;
+  countByDate: Map<string, number>;
+  leaveSet: Set<string>;
+  todayIso: string;
+  activeWeek: Set<string>;
+  onPick: (iso: string) => void;
+}) {
+  const grid = useMemo(() => monthCalendarGrid(year, month), [year, month]);
+  const monthLabel = `${year}.${String(month).padStart(2, '0')}`;
+  return (
+    <div className={`rounded-md border ${th.line} bg-[#0a0c10] p-2`}>
+      <div className="mb-1.5 flex items-center justify-between px-1">
+        <span className={`font-mono text-xs font-semibold ${th.gold}`}>{monthLabel}</span>
+        <span className={`font-mono text-[10px] ${th.muted}`}>{month} 月</span>
+      </div>
+      <div className="grid grid-cols-7 gap-px">
+        {['一', '二', '三', '四', '五', '六', '日'].map(d => (
+          <span key={d} className={`py-0.5 text-center font-mono text-[9px] ${th.muted}`}>
+            {d}
+          </span>
+        ))}
+        {grid.flat().map(iso => {
+          const parts = parseIsoDateParts(iso);
+          const inMonth = parts.month === month;
+          const count = countByDate.get(iso) ?? 0;
+          const leave = leaveSet.has(iso);
+          const isToday = iso === todayIso;
+          const inActive = activeWeek.has(iso);
+          return (
+            <button
+              key={iso}
+              type="button"
+              onClick={() => onPick(iso)}
+              title={`${iso}${count ? ` · ${count} 项` : ''}${leave ? ' · 已请假' : ''}`}
+              className={`relative flex aspect-square items-center justify-center rounded text-[10px] tabular-nums transition ${
+                !inMonth ? 'text-[#3a4150]' : 'text-[#d4cfc4]'
+              } ${
+                inActive ? 'ring-1 ring-[#c8aa6e]/60' : ''
+              } ${
+                count > 0 && inMonth ? 'bg-[#c8aa6e]/15 font-semibold text-[#e8d49a]' : 'hover:bg-[#1a2230]'
+              } ${isToday ? 'outline outline-1 outline-amber-400/70' : ''} ${leave && inMonth ? 'underline decoration-rose-500 decoration-2 underline-offset-[2px]' : ''}`}>
+              {parts.day}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

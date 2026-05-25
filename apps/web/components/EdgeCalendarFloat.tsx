@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { captainAvatarImgReferrerPolicy, captainAvatarImgSrc } from '@/lib/captain-avatar-placeholder';
 import { HOST_TYPE_LABEL } from '@/lib/hosting-types';
-import { isoDatesCurrentWeek, todayIsoDate } from '@/lib/hosting-week-utils';
+import { addDaysIso } from '@/lib/hosting-todo-schedule';
+import {
+  isoDatesCurrentWeek,
+  mondayIsoOfWeekContaining,
+  monthCalendarGrid,
+  parseIsoDateParts,
+  todayIsoDate,
+} from '@/lib/hosting-week-utils';
 
 const WEEK_TAB_LABELS = ['一', '二', '三', '四', '五', '六', '日'] as const;
 
@@ -146,22 +153,35 @@ function PanelHeader({
   weekDates,
   loading,
   onRefresh,
+  onPrevWeek,
+  onNextWeek,
+  onJumpToday,
+  onPickMonth,
+  isCurrentWeek,
+  monthLabel,
 }: {
   weekDates: string[];
   loading: boolean;
   onRefresh: () => void;
+  onPrevWeek: () => void;
+  onNextWeek: () => void;
+  onJumpToday: () => void;
+  onPickMonth: () => void;
+  isCurrentWeek: boolean;
+  monthLabel: string;
 }) {
   return (
-    <div className="shrink-0 border-b border-gray-200 bg-gray-50 px-4 pb-4 pt-3 md:px-4 md:pt-4">
+    <div className="shrink-0 border-b border-gray-200 bg-gray-50 px-4 pb-3 pt-3 md:px-4 md:pt-4">
       <div className="mx-auto mb-2 hidden h-1 w-10 rounded-full bg-gray-300 md:hidden" aria-hidden />
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-base font-bold tracking-tight text-gray-900">本周搜打撤行动预案</p>
-          <p className="mt-1.5 text-xs leading-relaxed text-gray-500">
-            <span className="font-mono text-[13px] text-gray-700">{weekDates[0] ?? ''}</span>
-            <span className="mx-1.5 text-gray-300">→</span>
-            <span className="font-mono text-[13px] text-gray-700">{weekDates[6] ?? ''}</span>
-            <span className="ml-2 hidden text-gray-400 sm:inline">周一至周日</span>
+          <p className="text-base font-bold tracking-tight text-gray-900">
+            {isCurrentWeek ? '本周搜打撤行动预案' : '排期预案'}
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-gray-500">
+            <span className="font-mono text-[12px] text-gray-700">{weekDates[0] ?? ''}</span>
+            <span className="mx-1 text-gray-300">→</span>
+            <span className="font-mono text-[12px] text-gray-700">{weekDates[6] ?? ''}</span>
           </p>
         </div>
         <button
@@ -170,6 +190,37 @@ function PanelHeader({
           disabled={loading}
           className="shrink-0 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-[#00A1D6] shadow-sm transition hover:border-sky-200 hover:bg-sky-50 disabled:opacity-40">
           {loading ? '…' : '刷新'}
+        </button>
+      </div>
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          onClick={onPrevWeek}
+          className="rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-600 transition hover:border-sky-200 hover:text-[#00A1D6]"
+          title="上一周">
+          〈 上周
+        </button>
+        <button
+          type="button"
+          onClick={onJumpToday}
+          disabled={isCurrentWeek}
+          className="rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-600 transition hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700 disabled:opacity-40"
+          title="回到今天所在周">
+          今天
+        </button>
+        <button
+          type="button"
+          onClick={onNextWeek}
+          className="rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-600 transition hover:border-sky-200 hover:text-[#00A1D6]"
+          title="下一周">
+          下周 〉
+        </button>
+        <button
+          type="button"
+          onClick={onPickMonth}
+          className="ml-auto rounded-md border border-[#00A1D6]/40 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-[#00A1D6] transition hover:bg-sky-100"
+          title="按月浏览">
+          {monthLabel} ▾
         </button>
       </div>
     </div>
@@ -318,21 +369,31 @@ function MobileDayDetail({ iso, idx, list, isToday, onLeave }: DayColumnProps) {
 
 export default function EdgeCalendarFloat() {
   const [open, setOpen] = useState(false);
-  const [weekDates, setWeekDates] = useState<string[]>(() => isoDatesCurrentWeek(todayIsoDate()));
-  const [selectedIso, setSelectedIso] = useState<string>(() => todayIsoDate());
+  const todayIso = todayIsoDate();
+  const [weekStart, setWeekStart] = useState<string>(() => mondayIsoOfWeekContaining(todayIso));
+  const [weekDates, setWeekDates] = useState<string[]>(() => isoDatesCurrentWeek(weekStart));
+  const [selectedIso, setSelectedIso] = useState<string>(() => todayIso);
   const [todos, setTodos] = useState<HostWeekTodo[]>([]);
   const [leaveDates, setLeaveDates] = useState<string[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
 
-  const todayIso = todayIsoDate();
   const todayDayNum = dayOfMonthFromIso(todayIso);
+  const isCurrentWeek = useMemo(() => weekDates.includes(todayIso), [weekDates, todayIso]);
+  const monthLabel = useMemo(() => {
+    const p = parseIsoDateParts(weekStart);
+    if (!p.year) return '';
+    return `${p.year}.${String(p.month).padStart(2, '0')}`;
+  }, [weekStart]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await fetch('/api/site/hosting-week', { cache: 'no-store' });
+      const res = await fetch(`/api/site/hosting-week?weekStart=${encodeURIComponent(weekStart)}`, {
+        cache: 'no-store',
+      });
       const body = (await res.json()) as {
         data?: { weekDates: string[]; todos: HostWeekTodo[]; leaveDates?: string[] };
         error?: string;
@@ -353,7 +414,7 @@ export default function EdgeCalendarFloat() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [weekStart]);
 
   useEffect(() => {
     void refresh();
@@ -366,7 +427,13 @@ export default function EdgeCalendarFloat() {
 
   useEffect(() => {
     if (!weekDates.length) return;
-    setSelectedIso(prev => (weekDates.includes(prev) ? prev : weekDates.includes(todayIso) ? todayIso : weekDates[0]!));
+    setSelectedIso(prev =>
+      weekDates.includes(prev)
+        ? prev
+        : weekDates.includes(todayIso)
+          ? todayIso
+          : weekDates[0]!,
+    );
   }, [weekDates, todayIso]);
 
   useEffect(() => {
@@ -448,7 +515,17 @@ export default function EdgeCalendarFloat() {
         className={`fixed inset-x-0 bottom-0 z-[90] flex max-h-[min(88dvh,720px)] flex-col rounded-t-2xl border border-gray-200 bg-white shadow-2xl transition-transform duration-300 ease-out md:hidden ${
           open ? 'translate-y-0' : 'pointer-events-none translate-y-full'
         }`}>
-        <PanelHeader weekDates={weekDates} loading={loading} onRefresh={() => void refresh()} />
+        <PanelHeader
+          weekDates={weekDates}
+          loading={loading}
+          onRefresh={() => void refresh()}
+          onPrevWeek={() => setWeekStart(prev => addDaysIso(prev, -7))}
+          onNextWeek={() => setWeekStart(prev => addDaysIso(prev, 7))}
+          onJumpToday={() => setWeekStart(mondayIsoOfWeekContaining(todayIso))}
+          onPickMonth={() => setMonthPickerOpen(true)}
+          isCurrentWeek={isCurrentWeek}
+          monthLabel={monthLabel}
+        />
 
         {loadError ? (
           <p className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs text-amber-900">{loadError}</p>
@@ -520,7 +597,17 @@ export default function EdgeCalendarFloat() {
               open ? 'pointer-events-auto w-[min(96vw,600px)] opacity-100' : 'pointer-events-none w-0 border-transparent opacity-0'
             }`}>
             <div className="flex w-[min(96vw,600px)] max-h-[min(90vh,760px)] flex-col bg-white">
-              <PanelHeader weekDates={weekDates} loading={loading} onRefresh={() => void refresh()} />
+              <PanelHeader
+                weekDates={weekDates}
+                loading={loading}
+                onRefresh={() => void refresh()}
+                onPrevWeek={() => setWeekStart(prev => addDaysIso(prev, -7))}
+                onNextWeek={() => setWeekStart(prev => addDaysIso(prev, 7))}
+                onJumpToday={() => setWeekStart(mondayIsoOfWeekContaining(todayIso))}
+                onPickMonth={() => setMonthPickerOpen(true)}
+                isCurrentWeek={isCurrentWeek}
+                monthLabel={monthLabel}
+              />
 
               {loadError ? (
                 <p className="shrink-0 border-b border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs text-amber-900">{loadError}</p>
@@ -552,6 +639,154 @@ export default function EdgeCalendarFloat() {
 
       {/* 移动端触发钮（桌面钮嵌在上面的 flex 里） */}
       <div className="md:hidden">{!open ? triggerBtn : null}</div>
+
+      {monthPickerOpen ? (
+        <MonthPickerOverlay
+          weekStart={weekStart}
+          todos={todos}
+          leaveDates={leaveDates}
+          todayIso={todayIso}
+          onPickWeek={iso => {
+            setWeekStart(mondayIsoOfWeekContaining(iso));
+            setMonthPickerOpen(false);
+          }}
+          onClose={() => setMonthPickerOpen(false)}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function MonthPickerOverlay({
+  weekStart,
+  todos,
+  leaveDates,
+  todayIso,
+  onPickWeek,
+  onClose,
+}: {
+  weekStart: string;
+  todos: HostWeekTodo[];
+  leaveDates: string[];
+  todayIso: string;
+  onPickWeek: (iso: string) => void;
+  onClose: () => void;
+}) {
+  const [pickerYear, setPickerYear] = useState<number>(() => parseIsoDateParts(weekStart).year || parseIsoDateParts(todayIso).year);
+  const [pickerMonth, setPickerMonth] = useState<number>(() => parseIsoDateParts(weekStart).month || parseIsoDateParts(todayIso).month);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const grid = useMemo(() => monthCalendarGrid(pickerYear, pickerMonth), [pickerYear, pickerMonth]);
+  const countByDate = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of todos) m.set(t.todoDate, (m.get(t.todoDate) ?? 0) + 1);
+    return m;
+  }, [todos]);
+  const leaveSet = useMemo(() => new Set(leaveDates), [leaveDates]);
+  const activeWeek = useMemo(() => new Set(isoDatesCurrentWeek(weekStart)), [weekStart]);
+
+  function shiftMonth(delta: number) {
+    let m = pickerMonth + delta;
+    let y = pickerYear;
+    while (m > 12) {
+      m -= 12;
+      y += 1;
+    }
+    while (m < 1) {
+      m += 12;
+      y -= 1;
+    }
+    setPickerYear(y);
+    setPickerMonth(m);
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-label="关闭月历"
+        className="fixed inset-0 z-[95] cursor-default bg-black/45"
+        onClick={onClose}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="按月浏览排期"
+        className="fixed left-1/2 top-1/2 z-[96] w-[min(92vw,360px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-gray-200 bg-white p-4 shadow-2xl">
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => shiftMonth(-1)}
+            className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-600 hover:border-sky-200 hover:text-[#00A1D6]"
+            title="上个月">
+            〈
+          </button>
+          <span className="font-mono text-sm font-semibold text-gray-800">
+            {pickerYear}.{String(pickerMonth).padStart(2, '0')}
+          </span>
+          <button
+            type="button"
+            onClick={() => shiftMonth(1)}
+            className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-600 hover:border-sky-200 hover:text-[#00A1D6]"
+            title="下个月">
+            〉
+          </button>
+        </div>
+        <div className="mt-3 grid grid-cols-7 gap-px text-center">
+          {['一', '二', '三', '四', '五', '六', '日'].map(d => (
+            <span key={d} className="py-1 text-[10px] font-semibold text-gray-400">
+              {d}
+            </span>
+          ))}
+          {grid.flat().map(iso => {
+            const parts = parseIsoDateParts(iso);
+            const inMonth = parts.month === pickerMonth;
+            const count = countByDate.get(iso) ?? 0;
+            const leave = leaveSet.has(iso);
+            const isToday = iso === todayIso;
+            const inActive = activeWeek.has(iso);
+            return (
+              <button
+                key={iso}
+                type="button"
+                onClick={() => onPickWeek(iso)}
+                title={`${iso}${count ? ` · ${count} 项` : ''}${leave ? ' · 已请假' : ''}`}
+                className={`relative flex aspect-square items-center justify-center rounded text-xs tabular-nums transition ${
+                  !inMonth ? 'text-gray-300' : 'text-gray-800'
+                } ${
+                  inActive ? 'ring-2 ring-[#00A1D6]/55' : ''
+                } ${
+                  count > 0 && inMonth ? 'bg-amber-100/70 font-semibold text-amber-900' : 'hover:bg-gray-100'
+                } ${isToday ? 'outline outline-1 outline-amber-400' : ''} ${
+                  leave && inMonth ? 'underline decoration-rose-500 decoration-2 underline-offset-[2px]' : ''
+                }`}>
+                {parts.day}
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-3 flex items-center justify-between text-[11px] text-gray-500">
+          <button
+            type="button"
+            onClick={() => {
+              const t = parseIsoDateParts(todayIso);
+              setPickerYear(t.year);
+              setPickerMonth(t.month);
+              onPickWeek(todayIso);
+            }}
+            className="rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-600 hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700">
+            回到今天
+          </button>
+          <span>点击任一天 · 跳到该日所在周</span>
+        </div>
+      </div>
     </>
   );
 }
