@@ -5,3 +5,9 @@ node_modules
 dist
 
 .vercel
+
+# 运行时日志
+*.log
+
+# Claude Code 工具的本地配置（每台机器独立，不该入库）
+.claude/settings.local.json
