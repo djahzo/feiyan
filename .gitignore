@@ -6,6 +6,8 @@ dist
 
 .vercel
 
+apps/web/public/pet-assets/backup/
+
 # 运行时日志
 *.log
 

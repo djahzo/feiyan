@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { BilibiliUserInfo, BilibiliVideo, BilibiliLiveStatus } from '@/types/bilibili';
 import ContactEmailAction from '@/components/ContactEmailAction';
 import EdgeCalendarFloat from '@/components/EdgeCalendarFloat';
+import SitePet from '@/components/SitePet';
 import { DEFAULT_SITE_CONFIG } from '@/lib/site-defaults';
 import type { SiteConfig } from '@/lib/site-config-types';
 
@@ -30,6 +31,16 @@ export default function HomePage() {
   const [videoTotal, setVideoTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [petLivePreview, setPetLivePreview] = useState(false);
+
+  const refreshLiveStatus = useCallback(async () => {
+    try {
+      const body = await fetch('/api/bilibili/live', { cache: 'no-store' }).then(r => r.json());
+      setLive(body?.data || null);
+    } catch {
+      // 直播状态失败不影响主站展示；保留上一轮状态。
+    }
+  }, []);
 
   const loadData = useCallback(async () => {
     setLoadError(null);
@@ -72,9 +83,21 @@ export default function HomePage() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  useEffect(() => {
+    setPetLivePreview(new URLSearchParams(window.location.search).get('petLive') === '1');
+  }, []);
+
   useEffect(() => { loadData(); }, [loadData]);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void refreshLiveStatus();
+    }, 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, [refreshLiveStatus]);
+
   const spaceUrl = useMemo(() => userInfo?.mid ? `https://space.bilibili.com/${userInfo.mid}` : 'https://www.bilibili.com', [userInfo?.mid]);
+  const petLiveActive = live?.live_status === 1 || petLivePreview;
   const heroSubtitle = (userInfo?.sign?.trim()) || cfg.defaultSign;
   const faceUrl = userInfo?.face || '';
   const displayNick = userInfo?.name || cfg.siteName;
@@ -287,6 +310,7 @@ export default function HomePage() {
       </footer>
 
       <EdgeCalendarFloat />
+      <SitePet liveActive={petLiveActive} />
 
       {showTop && (
         <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
