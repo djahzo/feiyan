@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getAdminFromRequest } from '@/lib/admin-session';
 import { getSiteSetting, setSiteSetting } from '@/lib/db';
-import { DEFAULT_WEIGHTS_CONFIG, validateWeightsConfig, type SchedulingWeightsConfig } from '@/lib/scheduling-weights';
+import { DEFAULT_WEIGHTS_CONFIG, validateWeightsConfig } from '@/lib/scheduling-weights';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -46,17 +46,19 @@ export async function PUT(req: NextRequest) {
     }
 
     // 验证权重范围
-    if (config.daysSinceLastWeight < 0 || config.daysSinceLastWeight > 10) {
-      return NextResponse.json({ error: '时间因子权重必须在 0-10 之间' }, { status: 400 });
-    }
-    if (config.shipTierWeight < 0 || config.shipTierWeight > 10) {
-      return NextResponse.json({ error: '等级因子权重必须在 0-10 之间' }, { status: 400 });
-    }
-    if (config.frequencyPenaltyWeight < 0 || config.frequencyPenaltyWeight > 10) {
-      return NextResponse.json({ error: '频率惩罚权重必须在 0-10 之间' }, { status: 400 });
-    }
-    if (config.newCaptainScore < 0 || config.newCaptainScore > 999999) {
-      return NextResponse.json({ error: '新舰长分数必须在 0-999999 之间' }, { status: 400 });
+    const checks: Array<[number, string, number]> = [
+      [config.daysSinceLastWeight, '时间因子权重', 10],
+      [config.daysSinceCreatedWeight, '入库天数权重', 10],
+      [config.frequencyPenaltyWeight, '频率惩罚权重', 10],
+      [config.shipTierWeight, '等级因子权重', 10],
+      [config.expiredPenaltyWeight, '过期惩罚分', 9999],
+      [config.newCaptainBonus, '新舰长加分', 999999],
+    ];
+
+    for (const [val, name, max] of checks) {
+      if (val < 0 || val > max) {
+        return NextResponse.json({ error: `${name} 必须在 0-${max} 之间` }, { status: 400 });
+      }
     }
 
     await setSiteSetting(SETTING_KEY, config);

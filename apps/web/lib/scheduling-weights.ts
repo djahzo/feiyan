@@ -7,14 +7,20 @@ import { todayIsoDate } from './hosting-week-utils';
 
 /** 权重配置 */
 export type SchedulingWeightsConfig = {
-  /** 距上次托管天数的权重系数 */
+  /** 距上次托管天数的权重系数（核心因子） */
   daysSinceLastWeight: number;
-  /** 舰长等级加成的权重系数 */
-  shipTierWeight: number;
+  /** 入库天数权重（新舰长用，距 created_at 的天数） */
+  daysSinceCreatedWeight: number;
+  /** 新舰长额外加分（保证新人优先排上，但不会压倒所有人） */
+  newCaptainBonus: number;
   /** 历史频率惩罚的权重系数 */
   frequencyPenaltyWeight: number;
-  /** 新舰长默认权重分数 */
-  newCaptainScore: number;
+  /** 舰长等级加成的权重系数（可置 0 关闭） */
+  shipTierWeight: number;
+  /** 是否排除已过期的舰长（不再续费的） */
+  excludeExpired: boolean;
+  /** 过期舰长惩罚分（excludeExpired 为 false 时生效） */
+  expiredPenaltyWeight: number;
   /** 是否启用智能推荐 */
   enabled: boolean;
 };
@@ -22,9 +28,12 @@ export type SchedulingWeightsConfig = {
 /** 默认权重配置 */
 export const DEFAULT_WEIGHTS_CONFIG: SchedulingWeightsConfig = {
   daysSinceLastWeight: 1.0,
-  shipTierWeight: 0.3,
+  daysSinceCreatedWeight: 0.5,
+  newCaptainBonus: 30,
   frequencyPenaltyWeight: 0.2,
-  newCaptainScore: 99999,
+  shipTierWeight: 0,
+  excludeExpired: false,
+  expiredPenaltyWeight: 20,
   enabled: true,
 };
 
@@ -43,26 +52,41 @@ export type CaptainRecommendation = {
   score: number;
   daysSinceLastHosting: number | null;
   lastHostingDate: string | null;
+  daysSinceCreated: number | null;
   totalHostingCount: number;
   shipTier: string | null;
   shipTierScore: number;
+  expireStatus: 'active' | 'expired' | 'none';
   isNewCaptain: boolean;
   scoreBreakdown: {
-    timeScore: number;
-    tierScore: number;
-    frequencyPenalty: number;
+    timeScore: number;          // 距上次托管/入库天数的时间分
+    tierScore: number;          // 等级加成
+    frequencyPenalty: number;   // 频率惩罚
+    expiredPenalty: number;     // 过期惩罚
+    newCaptainBonus: number;    // 新舰长额外加分
     finalScore: number;
   };
 };
 
 /**
- * 计算两个日期之间的天数差
+ * 计算两个日期之间的天数差（date2 - date1）
  */
 function daysBetween(date1: string, date2: string): number {
   const d1 = new Date(date1);
   const d2 = new Date(date2);
   const diffTime = Math.abs(d2.getTime() - d1.getTime());
   return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * 计算从时间戳到今天的天数
+ */
+function daysSinceTimestamp(ts: number | null | undefined): number | null {
+  if (!ts || !Number.isFinite(ts)) return null;
+  const now = Date.now();
+  const diffMs = now - ts;
+  if (diffMs < 0) return 0;
+  return Math.floor(diffMs / (1000 * 60 * 60 * 24));
 }
 
 /**
@@ -81,6 +105,20 @@ function getShipTierScore(shipTier: string | null): number {
 }
 
 /**
+ * 推断舰长的过期状态
+ * - 由于 expires_at 不一定可靠，这里基于 expireStatus 字段（如果有）
+ */
+function getCaptainExpireStatus(captain: CaptainRow): 'active' | 'expired' | 'none' {
+  // 如果有 expires_at 字段，可以基于它判断
+  const expiresAt = (captain as unknown as Record<string, unknown>).expires_at;
+  if (expiresAt && Number.isFinite(Number(expiresAt))) {
+    return Number(expiresAt) > Date.now() ? 'active' : 'expired';
+  }
+  // 如果没有，认为是 none（未知）
+  return 'none';
+}
+
+/**
  * 计算舰长的托管推荐权重分数
  */
 export function calculateCaptainScore(
@@ -90,6 +128,7 @@ export function calculateCaptainScore(
 ): CaptainRecommendation {
   const today = todayIsoDate();
   const displayName = getCaptainDisplayName(captain);
+  const expireStatus = getCaptainExpireStatus(captain);
 
   // 找出该舰长的所有托管记录
   const captainTodos = todos.filter(
@@ -102,29 +141,50 @@ export function calculateCaptainScore(
   const totalHostingCount = captainTodos.length;
   const isNewCaptain = totalHostingCount === 0;
 
-  // 新舰长直接返回配置的高分
+  // 计算距入库天数（用于新舰长）
+  const daysSinceCreated = daysSinceTimestamp(captain.created_at);
+
+  // 等级分数
+  const shipTierScoreVal = getShipTierScore(captain.ship_tier);
+  const tierScore = shipTierScoreVal * config.shipTierWeight;
+
+  // 过期惩罚
+  let expiredPenalty = 0;
+  if (expireStatus === 'expired') {
+    expiredPenalty = config.expiredPenaltyWeight;
+  }
+
+  // ============== 新舰长（从未托管过） ==============
   if (isNewCaptain) {
+    // 新舰长分数 = 入库天数 × 入库权重 + 新舰长加分 + 等级分 - 过期惩罚
+    const timeScore = (daysSinceCreated ?? 0) * config.daysSinceCreatedWeight;
+    const finalScore = timeScore + config.newCaptainBonus + tierScore - expiredPenalty;
+
     return {
       captainId: captain.id,
       uid: captain.uid,
       displayName,
-      score: config.newCaptainScore,
+      score: finalScore,
       daysSinceLastHosting: null,
       lastHostingDate: null,
+      daysSinceCreated,
       totalHostingCount: 0,
       shipTier: captain.ship_tier,
-      shipTierScore: getShipTierScore(captain.ship_tier),
+      shipTierScore: shipTierScoreVal,
+      expireStatus,
       isNewCaptain: true,
       scoreBreakdown: {
-        timeScore: 0,
-        tierScore: 0,
+        timeScore,
+        tierScore,
         frequencyPenalty: 0,
-        finalScore: config.newCaptainScore,
+        expiredPenalty,
+        newCaptainBonus: config.newCaptainBonus,
+        finalScore,
       },
     };
   }
 
-  // 找到最近一次托管日期
+  // ============== 已有托管历史的舰长 ==============
   const sortedDates = captainTodos
     .map((t) => t.todo_date)
     .sort()
@@ -134,11 +194,9 @@ export function calculateCaptainScore(
 
   // 计算各项分数
   const timeScore = daysSinceLastHosting * config.daysSinceLastWeight;
-  const shipTierScore = getShipTierScore(captain.ship_tier);
-  const tierScore = shipTierScore * config.shipTierWeight;
   const frequencyPenalty = totalHostingCount * config.frequencyPenaltyWeight;
 
-  const finalScore = timeScore + tierScore - frequencyPenalty;
+  const finalScore = timeScore + tierScore - frequencyPenalty - expiredPenalty;
 
   return {
     captainId: captain.id,
@@ -147,14 +205,18 @@ export function calculateCaptainScore(
     score: finalScore,
     daysSinceLastHosting,
     lastHostingDate,
+    daysSinceCreated,
     totalHostingCount,
     shipTier: captain.ship_tier,
-    shipTierScore,
+    shipTierScore: shipTierScoreVal,
+    expireStatus,
     isNewCaptain: false,
     scoreBreakdown: {
       timeScore,
       tierScore,
       frequencyPenalty,
+      expiredPenalty,
+      newCaptainBonus: 0,
       finalScore,
     },
   };
@@ -172,9 +234,14 @@ export function getRecommendedCaptains(
     return [];
   }
 
-  const recommendations = captains.map((captain) =>
+  let recommendations = captains.map((captain) =>
     calculateCaptainScore(captain, todos, config)
   );
+
+  // 排除已过期舰长（如果配置）
+  if (config.excludeExpired) {
+    recommendations = recommendations.filter((r) => r.expireStatus !== 'expired');
+  }
 
   // 按分数降序排序
   return recommendations.sort((a, b) => b.score - a.score);
@@ -201,26 +268,34 @@ export function validateWeightsConfig(config: unknown): SchedulingWeightsConfig 
 
   const c = config as Record<string, unknown>;
 
-  const daysSinceLastWeight = Number(c.daysSinceLastWeight);
-  const shipTierWeight = Number(c.shipTierWeight);
-  const frequencyPenaltyWeight = Number(c.frequencyPenaltyWeight);
-  const newCaptainScore = Number(c.newCaptainScore);
+  const daysSinceLastWeight = Number(c.daysSinceLastWeight ?? DEFAULT_WEIGHTS_CONFIG.daysSinceLastWeight);
+  const daysSinceCreatedWeight = Number(c.daysSinceCreatedWeight ?? DEFAULT_WEIGHTS_CONFIG.daysSinceCreatedWeight);
+  const newCaptainBonus = Number(c.newCaptainBonus ?? DEFAULT_WEIGHTS_CONFIG.newCaptainBonus);
+  const frequencyPenaltyWeight = Number(c.frequencyPenaltyWeight ?? DEFAULT_WEIGHTS_CONFIG.frequencyPenaltyWeight);
+  const shipTierWeight = Number(c.shipTierWeight ?? DEFAULT_WEIGHTS_CONFIG.shipTierWeight);
+  const expiredPenaltyWeight = Number(c.expiredPenaltyWeight ?? DEFAULT_WEIGHTS_CONFIG.expiredPenaltyWeight);
+  const excludeExpired = Boolean(c.excludeExpired);
   const enabled = Boolean(c.enabled);
 
   if (
     !Number.isFinite(daysSinceLastWeight) ||
-    !Number.isFinite(shipTierWeight) ||
+    !Number.isFinite(daysSinceCreatedWeight) ||
+    !Number.isFinite(newCaptainBonus) ||
     !Number.isFinite(frequencyPenaltyWeight) ||
-    !Number.isFinite(newCaptainScore)
+    !Number.isFinite(shipTierWeight) ||
+    !Number.isFinite(expiredPenaltyWeight)
   ) {
     return null;
   }
 
   return {
     daysSinceLastWeight,
-    shipTierWeight,
+    daysSinceCreatedWeight,
+    newCaptainBonus,
     frequencyPenaltyWeight,
-    newCaptainScore,
+    shipTierWeight,
+    excludeExpired,
+    expiredPenaltyWeight,
     enabled,
   };
 }
