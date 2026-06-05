@@ -45,14 +45,22 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: '配置格式不正确' }, { status: 400 });
     }
 
-    // 验证权重范围
+    // 验证各权重因子的系数范围
     const checks: Array<[number, string, number]> = [
-      [config.daysSinceLastWeight, '时间因子权重', 10],
-      [config.daysSinceCreatedWeight, '入库天数权重', 10],
-      [config.frequencyPenaltyWeight, '频率惩罚权重', 10],
-      [config.shipTierWeight, '等级因子权重', 10],
-      [config.expiredPenaltyWeight, '过期惩罚分', 9999],
-      [config.newCaptainBonus, '新舰长加分', 999999],
+      [config.daysSinceLastHosting.weight, '距上次托管天数权重', 100],
+      [config.daysSinceCreated.weight, '距入库天数权重', 100],
+      [config.daysSinceFirstHosting.weight, '距首次托管天数权重', 100],
+      [config.newCaptainBonus.weight, '新舰长加分', 999999],
+      [config.totalFrequencyPenalty.weight, '历史总次数惩罚权重', 100],
+      [config.weekFrequencyPenalty.weight, '本周已安排惩罚权重', 1000],
+      [config.monthFrequencyPenalty.weight, '本月已安排惩罚权重', 1000],
+      [config.recentFrequencyPenalty.weight, '最近30天惩罚权重', 1000],
+      [config.shipTier.weight, '舰长等级加成权重', 100],
+      [config.dataCompleteness.weight, '数据完整性加成权重', 100],
+      [config.hasAvatar.weight, '已上传头像加成权重', 100],
+      [config.stuckTaskPenalty.weight, '卡任务惩罚权重', 1000],
+      [config.avgIntervalBonus.weight, '平均间隔加成权重', 100],
+      [config.expiredPenalty.weight, '过期惩罚分', 9999],
     ];
 
     for (const [val, name, max] of checks) {
