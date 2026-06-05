@@ -6,6 +6,10 @@ dist
 
 .vercel
 
+# Turbo 构建缓存与日志（构建产物，不该入库）
+.turbo
+**/.turbo
+
 apps/web/public/pet-assets/backup/
 
 # 运行时日志
