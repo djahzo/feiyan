@@ -268,6 +268,37 @@ export async function saveSiteSettingsJson(json: string): Promise<void> {
   persistDb(db);
 }
 
+/**
+ * 从 site_settings JSON 中获取指定键的值
+ */
+export async function getSiteSetting(key: string): Promise<unknown> {
+  const json = await getSiteSettingsJson();
+  if (!json) return null;
+  try {
+    const obj = JSON.parse(json);
+    return obj[key] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 设置 site_settings JSON 中指定键的值
+ */
+export async function setSiteSetting(key: string, value: unknown): Promise<void> {
+  const json = await getSiteSettingsJson();
+  let obj: Record<string, unknown> = {};
+  if (json) {
+    try {
+      obj = JSON.parse(json);
+    } catch {
+      obj = {};
+    }
+  }
+  obj[key] = value;
+  await saveSiteSettingsJson(JSON.stringify(obj));
+}
+
 export async function getAdminCount(): Promise<number> {
   const db = await getDb();
   return rowCount(db, 'SELECT COUNT(*) FROM admins');

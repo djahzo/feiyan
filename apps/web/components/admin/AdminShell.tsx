@@ -48,6 +48,23 @@ function IconSpark() {
   );
 }
 
+function IconChart() {
+  return (
+    <svg className="h-[18px] w-[18px] shrink-0 opacity-80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+      <path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M18 17V9M13 17v-4M8 17v-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconSliders() {
+  return (
+    <svg className="h-[18px] w-[18px] shrink-0 opacity-80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+      <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function navBtn(active: boolean) {
   return active
     ? `flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-left text-sm ${c.activeBar} ${c.activeBg} font-medium ${c.activeText}`
@@ -60,6 +77,8 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   const captainActive = pathname?.startsWith('/admin/captains') ?? false;
   const hostingActive = pathname?.startsWith('/admin/hosting-todos') ?? false;
   const casesActive = pathname?.startsWith('/admin/cooperation-cases') ?? false;
+  const analyticsActive = pathname?.startsWith('/admin/analytics') ?? false;
+  const schedulingConfigActive = pathname?.startsWith('/admin/scheduling-config') ?? false;
 
   async function logout() {
     await fetch('/api/admin/logout', { method: 'POST' });
@@ -96,6 +115,16 @@ export default function AdminShell({ children }: { children: ReactNode }) {
           <Link href="/admin/cooperation-cases" className={navBtn(casesActive)}>
             <IconBriefcase />
             <span>合作案例</span>
+          </Link>
+
+          <p className={`px-2 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wider ${c.sub}`}>数据与策略</p>
+          <Link href="/admin/analytics" className={navBtn(analyticsActive)}>
+            <IconChart />
+            <span>数据分析</span>
+          </Link>
+          <Link href="/admin/scheduling-config" className={navBtn(schedulingConfigActive)}>
+            <IconSliders />
+            <span>排期权重配置</span>
           </Link>
 
           <button
