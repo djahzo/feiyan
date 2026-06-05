@@ -1,35 +1,31 @@
+! Corepack is about to download https://registry.npmjs.org/pnpm/-/pnpm-9.15.0.tgz
+C:\Users\jzdai2\AppData\Local\nvm\v22.22.0\node_modules\corepack\dist\lib\corepack.cjs:22051
+    throw new Error(
+          ^
 
-> web@0.1.0 build C:\Users\jzdai2\Desktop\feiyan\apps\web
-> next build
+Error: Error when performing the request to https://registry.npmjs.org/pnpm/-/pnpm-9.15.0.tgz; for troubleshooting help, see https://github.com/nodejs/corepack#troubleshooting
+    at fetch (C:\Users\jzdai2\AppData\Local\nvm\v22.22.0\node_modules\corepack\dist\lib\corepack.cjs:22051:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async fetchUrlStream (C:\Users\jzdai2\AppData\Local\nvm\v22.22.0\node_modules\corepack\dist\lib\corepack.cjs:22081:20)
+    ... 4 lines matching cause stack trace ...
+    at async Object.runMain (C:\Users\jzdai2\AppData\Local\nvm\v22.22.0\node_modules\corepack\dist\lib\corepack.cjs:23660:7) {
+  [cause]: TypeError: fetch failed
+      at node:internal/deps/undici/undici:14902:13
+      at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+      at async fetch (C:\Users\jzdai2\AppData\Local\nvm\v22.22.0\node_modules\corepack\dist\lib\corepack.cjs:22045:16)
+      at async fetchUrlStream (C:\Users\jzdai2\AppData\Local\nvm\v22.22.0\node_modules\corepack\dist\lib\corepack.cjs:22081:20)
+      at async download (C:\Users\jzdai2\AppData\Local\nvm\v22.22.0\node_modules\corepack\dist\lib\corepack.cjs:22208:18)
+      at async installVersion (C:\Users\jzdai2\AppData\Local\nvm\v22.22.0\node_modules\corepack\dist\lib\corepack.cjs:22300:55)
+      at async Engine.ensurePackageManager (C:\Users\jzdai2\AppData\Local\nvm\v22.22.0\node_modules\corepack\dist\lib\corepack.cjs:22851:32)
+      at async Engine.executePackageManagerRequest (C:\Users\jzdai2\AppData\Local\nvm\v22.22.0\node_modules\corepack\dist\lib\corepack.cjs:22962:25)
+      at async Object.runMain (C:\Users\jzdai2\AppData\Local\nvm\v22.22.0\node_modules\corepack\dist\lib\corepack.cjs:23660:7) {
+    [cause]: [Error: 9C580000:error:0A000419:SSL routines:ssl3_read_bytes:tlsv1 alert access denied:c:\ws\deps\openssl\openssl\ssl\record\rec_layer_s3.c:916:SSL alert number 49
+    ] {
+      library: 'SSL routines',
+      reason: 'tlsv1 alert access denied',
+      code: 'ERR_SSL_TLSV1_ALERT_ACCESS_DENIED'
+    }
+  }
+}
 
-  ▲ Next.js 14.2.29
-  - Environments: .env.local
-
-   Creating an optimized production build ...
- ✓ Compiled successfully
-   Linting and checking validity of types ...
-   Collecting page data ...
-   Generating static pages (0/8) ...
-   Generating static pages (2/8) 
-   Generating static pages (4/8) 
-   Generating static pages (6/8) 
- ✓ Generating static pages (8/8)
-   Finalizing page optimization ...
-   Collecting build traces ...
-
-Route (app)                              Size     First Load JS
-┌ ○ /                                    5.41 kB        92.5 kB
-├ ○ /_not-found                          873 B            88 kB
-├ ƒ /api/bilibili/dynamics               0 B                0 B
-├ ƒ /api/bilibili/live                   0 B                0 B
-├ ƒ /api/bilibili/user                   0 B                0 B
-└ ƒ /api/bilibili/videos                 0 B                0 B
-+ First Load JS shared by all            87.1 kB
-  ├ chunks/818-bda5aa886e137a3c.js       31.6 kB
-  ├ chunks/c56ac22f-6a455a3fcd8d5a8f.js  53.6 kB
-  └ other shared chunks (total)          1.85 kB
-
-
-○  (Static)   prerendered as static content
-ƒ  (Dynamic)  server-rendered on demand
-
+Node.js v22.22.0
