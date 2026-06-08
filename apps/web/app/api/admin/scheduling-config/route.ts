@@ -45,12 +45,9 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: '配置格式不正确' }, { status: 400 });
     }
 
-    // 范围二次校验（validateWeightsConfig 已做基础校验，这里做额外安全检查）
+    // 范围二次校验（validateWeightsConfig 已校验各因子权重，这里只做名额额外检查）
     if (config.dailySlots < 1 || config.dailySlots > 10) {
       return NextResponse.json({ error: '每日名额必须在 1-10 之间' }, { status: 400 });
-    }
-    if (config.newCaptainBonus.days < 0 || config.newCaptainBonus.days > 365) {
-      return NextResponse.json({ error: '新舰长虚拟等待天数必须在 0-365 之间' }, { status: 400 });
     }
 
     await setSiteSetting(SETTING_KEY, config);
