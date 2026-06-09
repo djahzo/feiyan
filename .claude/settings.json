@@ -8,7 +8,13 @@
       "Bash(git commit -m '新增数据分析与智能推荐系统 *)",
       "Bash(pkill -f \"next-server\")",
       "Bash(git commit -m '优化权重模型以适应实际情况 *)",
-      "Bash(python -m json.tool)"
+      "Bash(python -m json.tool)",
+      "Bash(git commit -m '停止追踪 turbo 构建缓存与日志 *)",
+      "Bash(git commit -m '修复构建错误：scheduling-config 校验代码引用了重构前的扁平字段名 *)",
+      "Bash(git commit -m ' *)",
+      "Bash(npx tsc *)",
+      "Bash(echo \"---exit:$?---\")",
+      "Bash(git commit *)"
     ]
   }
 }
