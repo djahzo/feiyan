@@ -306,6 +306,24 @@ export default function HomePage() {
               </a>
             </p>
           )}
+          <p className="mt-2 text-center text-xs text-[#999]">
+            Built with{' '}
+            <a
+              href="https://juejin.cn/user/3054881490875738"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-[#00A1D6] hover:underline">
+              Jahzo
+            </a>
+            {' & '}
+            <a
+              href="https://space.bilibili.com/5632308"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-[#00A1D6] hover:underline">
+              喝喝喝喝阔落
+            </a>
+          </p>
         </div>
       </footer>
 
