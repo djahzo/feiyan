@@ -1,12 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import type { SchedulingRotationConfig, CaptainRotationStatus } from '@/lib/scheduling-rotation';
-import type { DaySchedule } from '@/lib/scheduling-calendar';
+import type { SchedulingRotationConfig } from '@/lib/scheduling-rotation';
+import type { PeriodSchedule } from '@/lib/scheduling-calendar';
 
 const DEFAULT_CONFIG: SchedulingRotationConfig = {
   enabled: true,
   dailySlots: 2,
+  periodDays: 7,
   excludeScheduledThisWeek: false,
   excludeScheduledThisMonth: false,
   excludeExpired: false,
@@ -20,11 +21,8 @@ export default function SchedulingConfigPage() {
 
   const [config, setConfig] = useState<SchedulingRotationConfig>(DEFAULT_CONFIG);
   const [showPreview, setShowPreview] = useState(false);
-  const [previewDays, setPreviewDays] = useState(14);
-  const [calendar, setCalendar] = useState<DaySchedule[]>([]);
+  const [periods, setPeriods] = useState<PeriodSchedule[]>([]);
   const [importing, setImporting] = useState(false);
-  const [importMode, setImportMode] = useState<'all' | 'day' | 'week'>('all');
-  const [selectedDays, setSelectedDays] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -41,25 +39,23 @@ export default function SchedulingConfigPage() {
     }
   }, []);
 
-  const loadCalendar = useCallback(async (days: number) => {
+  const loadCalendar = useCallback(async (periodsCount: number, startDate?: string) => {
     try {
-      const res = await fetch(`/api/admin/schedule-calendar?days=${days}`);
+      const params = new URLSearchParams({ periods: String(periodsCount) });
+      if (startDate) params.set('startDate', startDate);
+      const res = await fetch(`/api/admin/schedule-calendar?${params}`);
       if (!res.ok) throw new Error('加载失败');
       const json = await res.json();
-      setCalendar(json.data || []);
+      return json.data || [];
     } catch (err) {
       console.error('加载日历失败', err);
-      setCalendar([]);
+      return [];
     }
   }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
-
-  useEffect(() => {
-    if (showPreview) void loadCalendar(previewDays);
-  }, [showPreview, previewDays, loadCalendar]);
 
   useEffect(() => {
     if (!toast) return;
@@ -81,7 +77,11 @@ export default function SchedulingConfigPage() {
         throw new Error(json.error || '保存失败');
       }
       setToast('保存成功');
-      if (showPreview) void loadCalendar(previewDays);
+      if (showPreview) {
+        // 重新生成演算
+        const newPeriods = await loadCalendar(1);
+        setPeriods(newPeriods);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败');
     } finally {
@@ -89,28 +89,35 @@ export default function SchedulingConfigPage() {
     }
   };
 
-  const handleImport = async () => {
-    if (calendar.length === 0) return;
+  const handleStartPreview = async () => {
+    setShowPreview(true);
+    const newPeriods = await loadCalendar(1);
+    setPeriods(newPeriods);
+  };
 
-    let itemsToImport: Array<{ date: string; roleName: string }> = [];
+  const handleNextPeriod = async () => {
+    if (periods.length === 0) return;
+    const lastPeriod = periods[periods.length - 1];
+    // 下一周期起始日 = 上一周期结束日 + 1 天
+    const nextStartDate = new Date(lastPeriod.endDate);
+    nextStartDate.setDate(nextStartDate.getDate() + 1);
+    const nextStartDateStr = nextStartDate.toISOString().slice(0, 10);
 
-    if (importMode === 'all') {
-      itemsToImport = calendar.flatMap((day) =>
-        day.recommendations.map((cap) => ({ date: day.date, roleName: cap.displayName })),
-      );
-    } else if (importMode === 'week') {
-      const firstWeek = calendar.slice(0, 7);
-      itemsToImport = firstWeek.flatMap((day) =>
-        day.recommendations.map((cap) => ({ date: day.date, roleName: cap.displayName })),
-      );
-    } else if (importMode === 'day') {
-      itemsToImport = calendar
-        .filter((day) => selectedDays.has(day.date))
-        .flatMap((day) => day.recommendations.map((cap) => ({ date: day.date, roleName: cap.displayName })));
-    }
+    // 追加生成一个新周期（但要基于累积的前序周期，所以重新生成全部）
+    const newPeriods = await loadCalendar(periods.length + 1);
+    setPeriods(newPeriods);
+  };
 
-    if (itemsToImport.length === 0) {
-      setError('没有选中任何待导入的排班');
+  const handleImportPeriod = async (periodIndex: number) => {
+    const period = periods[periodIndex];
+    if (!period) return;
+
+    const items = period.days.flatMap((day) =>
+      day.recommendations.map((cap) => ({ date: day.date, roleName: cap.displayName })),
+    );
+
+    if (items.length === 0) {
+      setError('该周期无推荐排班');
       return;
     }
 
@@ -120,28 +127,16 @@ export default function SchedulingConfigPage() {
       const res = await fetch('/api/admin/hosting-todos/batch-import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: itemsToImport, skipConflicts: true }),
+        body: JSON.stringify({ items, skipConflicts: true }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || '导入失败');
       setToast(json.message || '导入成功');
-      setShowPreview(false);
-      setSelectedDays(new Set());
     } catch (err) {
       setError(err instanceof Error ? err.message : '导入失败');
     } finally {
       setImporting(false);
     }
-  };
-
-  const toggleDaySelection = (date: string) => {
-    const newSet = new Set(selectedDays);
-    if (newSet.has(date)) {
-      newSet.delete(date);
-    } else {
-      newSet.add(date);
-    }
-    setSelectedDays(newSet);
   };
 
   if (loading) {
@@ -152,9 +147,9 @@ export default function SchedulingConfigPage() {
     <div className="flex h-full flex-col overflow-hidden">
       {/* 头部 */}
       <header className="border-b border-[#e3e5e7] bg-white px-6 py-4">
-        <h1 className="text-xl font-semibold text-[#18191c]">托管排期设置</h1>
+        <h1 className="text-xl font-semibold text-[#18191c]">排期演算</h1>
         <p className="mt-1 text-sm text-[#9499a0]">
-          轮值队列模型：按「需求债务（应得 - 已得）」公平轮换，距上次托管时间作为 tiebreaker
+          轮值队列模型：按「需求债务」循环推演，支持多周期累积滚动
         </p>
       </header>
 
@@ -183,6 +178,9 @@ export default function SchedulingConfigPage() {
             <p className="text-xs text-[#9499a0]">
               Tiebreaker：当债务相等时，距上次托管天数长的优先。
             </p>
+            <p className="mt-2 text-xs text-[#00a1d6]">
+              💡 「下一周期」会基于前面周期的预排结果更新债务，实现真正的循环轮转。
+            </p>
           </div>
         </div>
 
@@ -202,21 +200,35 @@ export default function SchedulingConfigPage() {
 
         {/* 核心参数 */}
         <section className="mb-6 max-w-4xl rounded-[10px] border border-[#e3e5e7] bg-white p-6 shadow-sm">
-          <h2 className="mb-1 text-base font-semibold text-[#18191c]">📊 轮值参数</h2>
+          <h2 className="mb-1 text-base font-semibold text-[#18191c]">📊 演算参数</h2>
           <p className="mb-4 text-xs text-[#9499a0]">
-            债务公式中的「每日名额」，影响每位舰长的理论应得轮值次数
+            决定每天推荐几人、每个周期多少天
           </p>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-[#61666d]">每日排班名额</label>
-            <input
-              type="number"
-              min={1}
-              max={10}
-              value={config.dailySlots}
-              onChange={(e) => setConfig({ ...config, dailySlots: parseInt(e.target.value, 10) || 1 })}
-              className="w-full max-w-xs rounded-md border border-[#e3e5e7] bg-white px-3 py-2 text-sm text-[#18191c] outline-none transition focus:border-[#00a1d6] focus:shadow-[0_0_0_2px_rgba(0,161,214,0.12)]"
-            />
-            <p className="text-xs text-[#9499a0]">范围 1-10，推荐 2-3</p>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-[#61666d]">每日排班名额</label>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={config.dailySlots}
+                onChange={(e) => setConfig({ ...config, dailySlots: parseInt(e.target.value, 10) || 1 })}
+                className="w-full max-w-xs rounded-md border border-[#e3e5e7] bg-white px-3 py-2 text-sm text-[#18191c] outline-none transition focus:border-[#00a1d6] focus:shadow-[0_0_0_2px_rgba(0,161,214,0.12)]"
+              />
+              <p className="text-xs text-[#9499a0]">范围 1-10，推荐 2-3</p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-[#61666d]">每周期天数</label>
+              <input
+                type="number"
+                min={1}
+                max={30}
+                value={config.periodDays}
+                onChange={(e) => setConfig({ ...config, periodDays: parseInt(e.target.value, 10) || 7 })}
+                className="w-full max-w-xs rounded-md border border-[#e3e5e7] bg-white px-3 py-2 text-sm text-[#18191c] outline-none transition focus:border-[#00a1d6] focus:shadow-[0_0_0_2px_rgba(0,161,214,0.12)]"
+              />
+              <p className="text-xs text-[#9499a0]">范围 1-30，推荐 7（一周）或 14（两周）</p>
+            </div>
           </div>
         </section>
 
@@ -265,127 +277,88 @@ export default function SchedulingConfigPage() {
             {saving ? '保存中...' : '保存配置'}
           </button>
           <button
-            onClick={() => setShowPreview(!showPreview)}
-            className="rounded-md border border-[#e3e5e7] bg-white px-4 py-2 text-sm font-medium text-[#61666d] transition hover:border-[#c9ccd0] hover:bg-[#f6f7f8]"
+            onClick={handleStartPreview}
+            disabled={showPreview}
+            className="rounded-md border border-[#e3e5e7] bg-white px-4 py-2 text-sm font-medium text-[#61666d] transition hover:border-[#c9ccd0] hover:bg-[#f6f7f8] disabled:opacity-50"
           >
-            {showPreview ? '隐藏预览' : '预览排班日历'}
+            {showPreview ? '演算中...' : '开始演算'}
           </button>
         </div>
 
-        {/* 预览日历 */}
+        {/* 演算结果 */}
         {showPreview && (
-          <section className="max-w-6xl rounded-[10px] border border-[#e3e5e7] bg-white p-6 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-[#18191c]">📅 未来排班日历</h2>
-              <div className="flex items-center gap-3">
-                <label className="flex items-center gap-2 text-sm text-[#61666d]">
-                  <span>预览天数:</span>
-                  <input
-                    type="number"
-                    min={7}
-                    max={30}
-                    value={previewDays}
-                    onChange={(e) => setPreviewDays(parseInt(e.target.value, 10) || 14)}
-                    className="w-20 rounded border border-[#e3e5e7] px-2 py-1 text-sm"
-                  />
-                </label>
+          <section className="max-w-6xl space-y-6">
+            {periods.length === 0 ? (
+              <div className="rounded-[10px] border border-[#e3e5e7] bg-white p-6 text-center text-sm text-[#9499a0]">
+                无推荐排班（检查配置和舰长数据）
               </div>
-            </div>
-
-            {calendar.length === 0 ? (
-              <p className="text-sm text-[#9499a0]">无推荐排班</p>
             ) : (
               <>
-                <div className="mb-4 space-y-3">
-                  {calendar.map((day) => (
-                    <div
-                      key={day.date}
-                      className={`rounded-md border p-3 transition ${
-                        selectedDays.has(day.date)
-                          ? 'border-[#fb7299] bg-[#fff5f7]'
-                          : 'border-[#e3e5e7] bg-white'
-                      }`}
-                    >
-                      <div className="mb-2 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            checked={selectedDays.has(day.date)}
-                            onChange={() => toggleDaySelection(day.date)}
-                            className="h-4 w-4 cursor-pointer"
-                          />
-                          <div>
-                            <span className="text-sm font-semibold text-[#18191c]">{day.date}</span>
-                            <span className="ml-2 text-xs text-[#9499a0]">{day.dayOfWeek}</span>
-                          </div>
-                        </div>
-                        <span className="text-xs text-[#9499a0]">
-                          {day.recommendations.length} 人
-                        </span>
+                {periods.map((period) => (
+                  <div
+                    key={period.periodIndex}
+                    className="rounded-[10px] border border-[#e3e5e7] bg-white p-6 shadow-sm"
+                  >
+                    <div className="mb-4 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-base font-semibold text-[#18191c]">
+                          第 {period.periodIndex + 1} 周期
+                        </h3>
+                        <p className="text-xs text-[#9499a0]">
+                          {period.startDate} 至 {period.endDate} ({period.days.length} 天)
+                        </p>
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        {day.recommendations.map((cap) => (
-                          <div
-                            key={cap.captainId}
-                            className="rounded bg-[#f6f7f8] px-3 py-1.5 text-sm"
-                          >
-                            <span className="font-medium text-[#18191c]">{cap.displayName}</span>
-                            <span className="ml-2 text-xs text-[#9499a0]">
-                              债务 {cap.demandDebt > 0 ? '+' : ''}
-                              {cap.demandDebt.toFixed(1)}
+                      <button
+                        onClick={() => handleImportPeriod(period.periodIndex)}
+                        disabled={importing}
+                        className="rounded-md bg-[#00a1d6] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[#00b5e5] disabled:opacity-50"
+                      >
+                        {importing ? '导入中...' : '导入本周期'}
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      {period.days.map((day) => (
+                        <div
+                          key={day.date}
+                          className="rounded-md border border-[#e3e5e7] bg-[#f6f7f8] p-3"
+                        >
+                          <div className="mb-2 flex items-center justify-between">
+                            <div>
+                              <span className="text-sm font-semibold text-[#18191c]">{day.date}</span>
+                              <span className="ml-2 text-xs text-[#9499a0]">{day.dayOfWeek}</span>
+                            </div>
+                            <span className="text-xs text-[#9499a0]">
+                              {day.recommendations.length} 人
                             </span>
                           </div>
-                        ))}
-                      </div>
+                          <div className="flex flex-wrap gap-2">
+                            {day.recommendations.map((cap) => (
+                              <div
+                                key={cap.captainId}
+                                className="rounded bg-white px-3 py-1.5 text-sm shadow-sm"
+                              >
+                                <span className="font-medium text-[#18191c]">{cap.displayName}</span>
+                                <span className="ml-2 text-xs text-[#9499a0]">
+                                  债务 {cap.demandDebt > 0 ? '+' : ''}
+                                  {cap.demandDebt.toFixed(1)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-
-                {/* 导入操作 */}
-                <div className="border-t border-[#e3e5e7] pt-4">
-                  <div className="mb-3 flex items-center gap-4">
-                    <span className="text-sm font-medium text-[#61666d]">导入范围:</span>
-                    <label className="flex cursor-pointer items-center gap-2 text-sm text-[#61666d]">
-                      <input
-                        type="radio"
-                        name="importMode"
-                        value="all"
-                        checked={importMode === 'all'}
-                        onChange={() => setImportMode('all')}
-                      />
-                      <span>全部 ({calendar.length} 天)</span>
-                    </label>
-                    <label className="flex cursor-pointer items-center gap-2 text-sm text-[#61666d]">
-                      <input
-                        type="radio"
-                        name="importMode"
-                        value="week"
-                        checked={importMode === 'week'}
-                        onChange={() => setImportMode('week')}
-                      />
-                      <span>第一周 (7 天)</span>
-                    </label>
-                    <label className="flex cursor-pointer items-center gap-2 text-sm text-[#61666d]">
-                      <input
-                        type="radio"
-                        name="importMode"
-                        value="day"
-                        checked={importMode === 'day'}
-                        onChange={() => setImportMode('day')}
-                      />
-                      <span>选中的日期 ({selectedDays.size} 天)</span>
-                    </label>
                   </div>
+                ))}
+
+                <div className="flex justify-center">
                   <button
-                    onClick={handleImport}
-                    disabled={importing}
-                    className="rounded-md bg-[#00a1d6] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[#00b5e5] disabled:opacity-50"
+                    onClick={handleNextPeriod}
+                    className="rounded-md border-2 border-dashed border-[#00a1d6] bg-white px-6 py-3 text-sm font-medium text-[#00a1d6] transition hover:bg-[#f0f9ff]"
                   >
-                    {importing ? '导入中...' : '批量导入到待办'}
+                    ➕ 下一周期
                   </button>
-                  <p className="mt-2 text-xs text-[#9499a0]">
-                    导入时自动跳过已存在的同日同舰长排班，不会重复
-                  </p>
                 </div>
               </>
             )}

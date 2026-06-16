@@ -20,7 +20,11 @@
       "Read(//c/Users/jzdai2/.claude/projects/c--Users-jzdai2-Desktop-feiyan/memory/**)",
       "Bash(pnpm --filter web build)",
       "Bash(node_modules/.bin/next build *)",
-      "Bash(echo \"tsc exit=$?\")"
+      "Bash(echo \"tsc exit=$?\")",
+      "Bash(find . -name \"*.db\" -not -path \"*/node_modules/*\")",
+      "Bash(ls -la apps/web/data)",
+      "Bash(ls -la data)",
+      "Bash(tasklist)"
     ]
   }
 }

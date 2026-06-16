@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server';
 import { getAdminFromRequest } from '@/lib/admin-session';
 import { listCaptains, listHostingTodos, getSiteSetting } from '@/lib/db';
 import { DEFAULT_ROTATION_CONFIG, validateRotationConfig } from '@/lib/scheduling-rotation';
-import { generateScheduleCalendar } from '@/lib/scheduling-calendar';
+import { generateMultiplePeriods } from '@/lib/scheduling-calendar';
 import { todayIsoDate } from '@/lib/hosting-week-utils';
 
 export const runtime = 'nodejs';
@@ -14,11 +14,11 @@ const LEGACY_SETTING_KEY = 'scheduling_weights_config';
 
 /**
  * GET /api/admin/schedule-calendar
- * 生成未来 N 天的推荐排班日历
+ * 生成多个周期的排班日历
  *
  * Query params:
  *   - startDate: ISO 日期（默认今天）
- *   - days: 天数（默认 14）
+ *   - periods: 生成几个周期（默认 1）
  */
 export async function GET(req: NextRequest) {
   try {
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const startDate = searchParams.get('startDate') || todayIsoDate();
-    const days = parseInt(searchParams.get('days') || '14', 10);
+    const periods = parseInt(searchParams.get('periods') || '1', 10);
 
     const captains = await listCaptains();
     const todos = await listHostingTodos();
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const calendar = generateScheduleCalendar(captains, todos, config, startDate, days);
+    const calendar = generateMultiplePeriods(captains, todos, config, periods, startDate);
 
     return NextResponse.json({ data: calendar, config });
   } catch (e) {

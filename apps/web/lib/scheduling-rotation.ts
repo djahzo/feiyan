@@ -32,6 +32,9 @@ export type SchedulingRotationConfig = {
   /** 每日排班名额 */
   dailySlots: number;
 
+  /** 每周期天数（用于「下一周期」按钮） */
+  periodDays: number;
+
   // ===== 硬过滤规则（直接剔除，不参与排序） =====
   /** 排除本周已排过的 */
   excludeScheduledThisWeek: boolean;
@@ -45,6 +48,7 @@ export type SchedulingRotationConfig = {
 export const DEFAULT_ROTATION_CONFIG: SchedulingRotationConfig = {
   enabled: true,
   dailySlots: 2,
+  periodDays: 7,
   excludeScheduledThisWeek: false,
   excludeScheduledThisMonth: false,
   excludeExpired: false,
@@ -280,6 +284,7 @@ export function validateRotationConfig(config: unknown): SchedulingRotationConfi
 
   try {
     const dailySlots = Number(c.dailySlots ?? DEFAULT_ROTATION_CONFIG.dailySlots);
+    const periodDays = Number(c.periodDays ?? DEFAULT_ROTATION_CONFIG.periodDays);
 
     // 兼容旧版 filterXxx 字段名
     const excludeScheduledThisWeek = Boolean(
@@ -297,6 +302,9 @@ export function validateRotationConfig(config: unknown): SchedulingRotationConfi
       dailySlots: Number.isFinite(dailySlots) && dailySlots >= 1 && dailySlots <= 10
         ? dailySlots
         : DEFAULT_ROTATION_CONFIG.dailySlots,
+      periodDays: Number.isFinite(periodDays) && periodDays >= 1 && periodDays <= 30
+        ? periodDays
+        : DEFAULT_ROTATION_CONFIG.periodDays,
       excludeScheduledThisWeek,
       excludeScheduledThisMonth,
       excludeExpired,
