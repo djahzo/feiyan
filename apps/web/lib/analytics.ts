@@ -45,7 +45,7 @@ export type TimeRangeStats = {
   avgTodosPerDay: number;
   captainFrequencies: CaptainFrequencyStats[];
   hostTypeDistribution: HostTypeDistribution;
-  busiestDates: DateHostingStats[];  // 最忙的日期（Top 10）
+  topScanFrequency: CaptainFrequencyStats[];  // 扫号频率 Top 10
 };
 
 /**
@@ -194,6 +194,64 @@ export function analyzeHostTypeDistribution(
 }
 
 /**
+ * 获取扫号频率 Top 10
+ * 按历史累计扫号次数降序，同频率的按距今最久排序
+ */
+export function getTopScanFrequency(
+  todos: HostingTodoRow[],
+  topN: number = 10
+): CaptainFrequencyStats[] {
+  const today = todayIsoDate();
+
+  // 按舰长分组统计
+  const statsMap = new Map<string, CaptainFrequencyStats>();
+
+  for (const todo of todos) {
+    const name = todo.role_name;
+    let stats = statsMap.get(name);
+
+    if (!stats) {
+      stats = {
+        roleName: name,
+        totalCount: 0,
+        scanCount: 0,
+        groupCount: 0,
+        lastHostingDate: null,
+        daysSinceLastHosting: null,
+        avgDaysInterval: null,
+      };
+      statsMap.set(name, stats);
+    }
+
+    stats.totalCount++;
+    if (todo.host_type === 'scan') stats.scanCount++;
+    if (todo.host_type === 'group') stats.groupCount++;
+
+    // 更新最近托管日期
+    if (!stats.lastHostingDate || todo.todo_date > stats.lastHostingDate) {
+      stats.lastHostingDate = todo.todo_date;
+    }
+  }
+
+  // 计算距今天数
+  for (const stats of statsMap.values()) {
+    if (stats.lastHostingDate) {
+      stats.daysSinceLastHosting = daysBetween(stats.lastHostingDate, today);
+    }
+  }
+
+  // 排序：累计托管次数降序，同频率按距今天数降序（越久没托管越优先）
+  const sorted = Array.from(statsMap.values()).sort((a, b) => {
+    if (b.totalCount !== a.totalCount) return b.totalCount - a.totalCount;
+    const aDays = a.daysSinceLastHosting ?? 0;
+    const bDays = b.daysSinceLastHosting ?? 0;
+    return bDays - aDays;
+  });
+
+  return sorted.slice(0, topN);
+}
+
+/**
  * 获取时间范围内的完整统计
  */
 export function getTimeRangeStats(
@@ -204,15 +262,11 @@ export function getTimeRangeStats(
   const filtered = todos.filter((t) => t.todo_date >= startDate && t.todo_date <= endDate);
 
   const captainFrequencies = analyzeCaptainFrequency(todos, startDate, endDate);
-  const dateStats = analyzeDateHosting(todos, startDate, endDate);
   const hostTypeDistribution = analyzeHostTypeDistribution(todos, startDate, endDate);
+  const topScanFrequency = getTopScanFrequency(todos, 10);
 
   const uniqueDates = new Set(filtered.map((t) => t.todo_date));
   const totalDays = daysBetween(startDate, endDate) + 1;
-
-  const busiestDates = dateStats
-    .sort((a, b) => b.totalCount - a.totalCount)
-    .slice(0, 10);
 
   return {
     startDate,
@@ -223,7 +277,7 @@ export function getTimeRangeStats(
     avgTodosPerDay: uniqueDates.size > 0 ? Math.round((filtered.length / uniqueDates.size) * 10) / 10 : 0,
     captainFrequencies,
     hostTypeDistribution,
-    busiestDates,
+    topScanFrequency,
   };
 }
 

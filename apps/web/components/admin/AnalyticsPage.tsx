@@ -21,6 +21,10 @@ export default function AnalyticsPage() {
   const [captainFreqData, setCaptainFreqData] = useState<CaptainFrequencyStats[]>([]);
   const [dateHostingData, setDateHostingData] = useState<DateHostingStats[]>([]);
 
+  // 全表分页
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(20);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -36,6 +40,7 @@ export default function AnalyticsPage() {
         if (!res.ok) throw new Error('加载失败');
         const json = await res.json();
         setCaptainFreqData(json.data);
+        setCurrentPage(1);
       } else if (activeTab === 'date-hosting') {
         const res = await fetch(`/api/admin/analytics?type=date-hosting&startDate=${startDate}&endDate=${endDate}`);
         if (!res.ok) throw new Error('加载失败');
@@ -53,7 +58,7 @@ export default function AnalyticsPage() {
     void load();
   }, [load]);
 
-  const exportCsv = async (type: 'captain-frequency' | 'date-hosting' | 'export-all') => {
+  const exportCsv = async (type: 'captain-frequency' | 'date-hosting') => {
     try {
       const res = await fetch(`/api/admin/analytics?type=${type}&format=csv&startDate=${startDate}&endDate=${endDate}`);
       if (!res.ok) throw new Error('导出失败');
@@ -88,6 +93,10 @@ export default function AnalyticsPage() {
       </button>
     );
   };
+
+  // 分页逻辑
+  const totalPages = Math.ceil(captainFreqData.length / pageSize);
+  const paginatedData = captainFreqData.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -173,9 +182,130 @@ export default function AnalyticsPage() {
             </div>
 
             <div className={c.card}>
+              <h3 className="text-lg font-semibold">扫号频率 Top 10</h3>
+              <p className="mt-1 text-xs text-[#9499a0]">按历史累计托管次数降序，同频率按距今最久排序</p>
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b border-[#e3e5e7]">
+                    <tr className="text-left">
+                      <th className="pb-2 font-medium text-[#61666d]">排名</th>
+                      <th className="pb-2 font-medium text-[#61666d]">舰长</th>
+                      <th className="pb-2 font-medium text-[#61666d]">累计次数</th>
+                      <th className="pb-2 font-medium text-[#61666d]">扫号</th>
+                      <th className="pb-2 font-medium text-[#61666d]">组排</th>
+                      <th className="pb-2 font-medium text-[#61666d]">最近托管</th>
+                      <th className="pb-2 font-medium text-[#61666d]">距今天数</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summaryData.topScanFrequency.map((d, idx) => (
+                      <tr key={d.roleName} className="border-b border-[#f6f7f8]">
+                        <td className="py-2 text-[#9499a0]">#{idx + 1}</td>
+                        <td className="py-2 font-medium">{d.roleName}</td>
+                        <td className="py-2 font-bold text-[#fb7299]">{d.totalCount}</td>
+                        <td className="py-2 text-pink-600">{d.scanCount}</td>
+                        <td className="py-2 text-blue-600">{d.groupCount}</td>
+                        <td className="py-2 text-[#61666d]">{d.lastHostingDate || '-'}</td>
+                        <td className="py-2 text-[#9499a0]">{d.daysSinceLastHosting ?? '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!loading && !error && activeTab === 'captain-frequency' && (
+          <div className="space-y-6">
+            <div className={c.card}>
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Top 10 最忙日期</h3>
-                <button type="button" onClick={() => void exportCsv('date-hosting')} className={c.btnGhost}>
+                <div>
+                  <h3 className="text-lg font-semibold">舰长扫号全表</h3>
+                  <p className="mt-1 text-xs text-[#9499a0]">
+                    共 {captainFreqData.length} 位舰长 · 当前显示第 {currentPage}/{totalPages} 页
+                  </p>
+                </div>
+                <button type="button" onClick={() => void exportCsv('captain-frequency')} className={c.btnPrimary}>
+                  导出全表 CSV
+                </button>
+              </div>
+
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b border-[#e3e5e7]">
+                    <tr className="text-left">
+                      <th className="pb-2 font-medium text-[#61666d]">舰长</th>
+                      <th className="pb-2 font-medium text-[#61666d]">累计次数</th>
+                      <th className="pb-2 font-medium text-[#61666d]">扫号</th>
+                      <th className="pb-2 font-medium text-[#61666d]">组排</th>
+                      <th className="pb-2 font-medium text-[#61666d]">最近托管日期</th>
+                      <th className="pb-2 font-medium text-[#61666d]">距今天数</th>
+                      <th className="pb-2 font-medium text-[#61666d]">平均间隔</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedData.map((d) => (
+                      <tr key={d.roleName} className="border-b border-[#f6f7f8]">
+                        <td className="py-2 font-medium">{d.roleName}</td>
+                        <td className="py-2 font-bold text-[#fb7299]">{d.totalCount}</td>
+                        <td className="py-2 text-pink-600">{d.scanCount}</td>
+                        <td className="py-2 text-blue-600">{d.groupCount}</td>
+                        <td className="py-2 text-[#61666d]">{d.lastHostingDate || '-'}</td>
+                        <td className="py-2 text-[#9499a0]">{d.daysSinceLastHosting ?? '-'}</td>
+                        <td className="py-2 text-[#9499a0]">{d.avgDaysInterval ?? '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* 分页控件 */}
+              {totalPages > 1 && (
+                <div className="mt-4 flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                    className={c.btnGhost + ' disabled:opacity-40'}
+                  >
+                    首页
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    className={c.btnGhost + ' disabled:opacity-40'}
+                  >
+                    上一页
+                  </button>
+                  <span className="text-sm text-[#61666d]">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    className={c.btnGhost + ' disabled:opacity-40'}
+                  >
+                    下一页
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                    className={c.btnGhost + ' disabled:opacity-40'}
+                  >
+                    末页
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {!loading && !error && activeTab === 'date-hosting' && (
+          <div className="space-y-6">
+            <div className={c.card}>
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">日期托管统计</h3>
+                <button type="button" onClick={() => void exportCsv('date-hosting')} className={c.btnPrimary}>
                   导出CSV
                 </button>
               </div>
@@ -191,92 +321,18 @@ export default function AnalyticsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {summaryData.busiestDates.map((d) => (
+                    {dateHostingData.map((d) => (
                       <tr key={d.date} className="border-b border-[#f6f7f8]">
                         <td className="py-2">{d.date}</td>
                         <td className="py-2">{d.totalCount}</td>
                         <td className="py-2 text-pink-600">{d.scanCount}</td>
                         <td className="py-2 text-blue-600">{d.groupCount}</td>
-                        <td className="py-2 text-[#9499a0]">{d.roleNames.join(', ')}</td>
+                        <td className="py-2 text-xs text-[#9499a0]">{d.roleNames.join(', ')}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            </div>
-          </div>
-        )}
-
-        {!loading && !error && activeTab === 'captain-frequency' && (
-          <div className={c.card}>
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold">舰长托管频率统计</h3>
-              <button type="button" onClick={() => void exportCsv('captain-frequency')} className={c.btnGhost}>
-                导出CSV
-              </button>
-            </div>
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="border-b border-[#e3e5e7]">
-                  <tr className="text-left">
-                    <th className="pb-2 font-medium text-[#61666d]">舰长名称</th>
-                    <th className="pb-2 font-medium text-[#61666d]">总次数</th>
-                    <th className="pb-2 font-medium text-[#61666d]">扫号</th>
-                    <th className="pb-2 font-medium text-[#61666d]">组排</th>
-                    <th className="pb-2 font-medium text-[#61666d]">最近托管</th>
-                    <th className="pb-2 font-medium text-[#61666d]">距今天数</th>
-                    <th className="pb-2 font-medium text-[#61666d]">平均间隔</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {captainFreqData.map((c) => (
-                    <tr key={c.roleName} className="border-b border-[#f6f7f8]">
-                      <td className="py-2 font-medium">{c.roleName}</td>
-                      <td className="py-2">{c.totalCount}</td>
-                      <td className="py-2 text-pink-600">{c.scanCount}</td>
-                      <td className="py-2 text-blue-600">{c.groupCount}</td>
-                      <td className="py-2">{c.lastHostingDate || '-'}</td>
-                      <td className="py-2">{c.daysSinceLastHosting !== null ? `${c.daysSinceLastHosting} 天` : '-'}</td>
-                      <td className="py-2 text-[#9499a0]">{c.avgDaysInterval !== null ? `${c.avgDaysInterval} 天` : '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {!loading && !error && activeTab === 'date-hosting' && (
-          <div className={c.card}>
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold">日期托管统计</h3>
-              <button type="button" onClick={() => void exportCsv('export-all')} className={c.btnGhost}>
-                导出所有记录
-              </button>
-            </div>
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="border-b border-[#e3e5e7]">
-                  <tr className="text-left">
-                    <th className="pb-2 font-medium text-[#61666d]">日期</th>
-                    <th className="pb-2 font-medium text-[#61666d]">总次数</th>
-                    <th className="pb-2 font-medium text-[#61666d]">扫号</th>
-                    <th className="pb-2 font-medium text-[#61666d]">组排</th>
-                    <th className="pb-2 font-medium text-[#61666d]">舰长列表</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dateHostingData.map((d) => (
-                    <tr key={d.date} className="border-b border-[#f6f7f8]">
-                      <td className="py-2">{d.date}</td>
-                      <td className="py-2">{d.totalCount}</td>
-                      <td className="py-2 text-pink-600">{d.scanCount}</td>
-                      <td className="py-2 text-blue-600">{d.groupCount}</td>
-                      <td className="py-2 text-[#9499a0]">{d.roleNames.join(', ')}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
           </div>
         )}
