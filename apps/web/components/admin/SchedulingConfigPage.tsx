@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import type { SchedulingRotationConfig } from '@/lib/scheduling-rotation';
-import type { PeriodSchedule } from '@/lib/scheduling-calendar';
+import type { PeriodSchedule, DaySchedule } from '@/lib/scheduling-calendar';
+import type { HostingTodoRow } from '@/lib/db';
 
 const DEFAULT_CONFIG: SchedulingRotationConfig = {
   enabled: true,
@@ -22,6 +23,7 @@ export default function SchedulingConfigPage() {
   const [config, setConfig] = useState<SchedulingRotationConfig>(DEFAULT_CONFIG);
   const [showPreview, setShowPreview] = useState(false);
   const [periods, setPeriods] = useState<PeriodSchedule[]>([]);
+  const [accumulatedVirtualTodos, setAccumulatedVirtualTodos] = useState<HostingTodoRow[]>([]);
   const [importing, setImporting] = useState(false);
 
   const load = useCallback(async () => {
@@ -39,19 +41,25 @@ export default function SchedulingConfigPage() {
     }
   }, []);
 
-  const loadCalendar = useCallback(async (periodsCount: number, startDate?: string) => {
-    try {
-      const params = new URLSearchParams({ periods: String(periodsCount) });
-      if (startDate) params.set('startDate', startDate);
-      const res = await fetch(`/api/admin/schedule-calendar?${params}`);
-      if (!res.ok) throw new Error('加载失败');
-      const json = await res.json();
-      return json.data || [];
-    } catch (err) {
-      console.error('加载日历失败', err);
-      return [];
-    }
-  }, []);
+  // 生成单个周期（支持传入累积虚拟待办）
+  const generateNextPeriod = useCallback(
+    async (startDate: string, virtualTodos: HostingTodoRow[]) => {
+      try {
+        const res = await fetch('/api/admin/schedule-calendar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ startDate, virtualTodos }),
+        });
+        if (!res.ok) throw new Error('生成失败');
+        const json = await res.json();
+        return json.data;
+      } catch (err) {
+        console.error('生成周期失败', err);
+        return null;
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     void load();
@@ -78,9 +86,8 @@ export default function SchedulingConfigPage() {
       }
       setToast('保存成功');
       if (showPreview) {
-        // 重新生成演算
-        const newPeriods = await loadCalendar(1);
-        setPeriods(newPeriods);
+        // 重新生成演算（清空累积状态）
+        await handleStartPreview();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败');
@@ -91,21 +98,54 @@ export default function SchedulingConfigPage() {
 
   const handleStartPreview = async () => {
     setShowPreview(true);
-    const newPeriods = await loadCalendar(1);
-    setPeriods(newPeriods);
+    setError(null);
+
+    // 从今天开始生成第 1 周期，不传虚拟待办
+    const result = await generateNextPeriod(new Date().toISOString().slice(0, 10), []);
+    if (!result || !result.days) {
+      setError('生成失败');
+      return;
+    }
+
+    const firstPeriod: PeriodSchedule = {
+      periodIndex: 0,
+      startDate: result.days[0]?.date || new Date().toISOString().slice(0, 10),
+      endDate: result.days[result.days.length - 1]?.date || new Date().toISOString().slice(0, 10),
+      days: result.days,
+    };
+
+    setPeriods([firstPeriod]);
+    setAccumulatedVirtualTodos(result.newVirtualTodos || []);
   };
 
   const handleNextPeriod = async () => {
     if (periods.length === 0) return;
+    setError(null);
+
     const lastPeriod = periods[periods.length - 1];
     // 下一周期起始日 = 上一周期结束日 + 1 天
     const nextStartDate = new Date(lastPeriod.endDate);
     nextStartDate.setDate(nextStartDate.getDate() + 1);
     const nextStartDateStr = nextStartDate.toISOString().slice(0, 10);
 
-    // 追加生成一个新周期（但要基于累积的前序周期，所以重新生成全部）
-    const newPeriods = await loadCalendar(periods.length + 1);
-    setPeriods(newPeriods);
+    // 生成下一个周期，传入累积的虚拟待办
+    const result = await generateNextPeriod(nextStartDateStr, accumulatedVirtualTodos);
+    if (!result || !result.days) {
+      setError('生成下一周期失败');
+      return;
+    }
+
+    const newPeriod: PeriodSchedule = {
+      periodIndex: periods.length,
+      startDate: result.days[0]?.date || nextStartDateStr,
+      endDate: result.days[result.days.length - 1]?.date || nextStartDateStr,
+      days: result.days,
+    };
+
+    // 追加新周期
+    setPeriods([...periods, newPeriod]);
+    // 更新累积虚拟待办
+    setAccumulatedVirtualTodos([...accumulatedVirtualTodos, ...(result.newVirtualTodos || [])]);
   };
 
   const handleImportPeriod = async (periodIndex: number) => {
