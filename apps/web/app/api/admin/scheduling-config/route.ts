@@ -2,22 +2,26 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getAdminFromRequest } from '@/lib/admin-session';
 import { getSiteSetting, setSiteSetting } from '@/lib/db';
-import { DEFAULT_WEIGHTS_CONFIG, validateWeightsConfig } from '@/lib/scheduling-weights';
+import { DEFAULT_ROTATION_CONFIG, validateRotationConfig } from '@/lib/scheduling-rotation';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const SETTING_KEY = 'scheduling_weights_config';
+const SETTING_KEY = 'scheduling_rotation_config';
+/** 旧版权重模型的存储 key，仅用于一次性迁移读取 */
+const LEGACY_SETTING_KEY = 'scheduling_weights_config';
 
 export async function GET(req: NextRequest) {
   try {
     const session = await getAdminFromRequest(req);
     if (!session) return NextResponse.json({ error: '未登录' }, { status: 401 });
 
+    // 优先读新 key；缺失时回退到旧 key 做平滑迁移（validateRotationConfig 兼容旧字段名）
     const saved = await getSiteSetting(SETTING_KEY);
-    const config = saved ? validateWeightsConfig(saved) : null;
+    const legacy = saved ? null : await getSiteSetting(LEGACY_SETTING_KEY);
+    const config = validateRotationConfig(saved ?? legacy);
 
-    return NextResponse.json({ data: config || DEFAULT_WEIGHTS_CONFIG });
+    return NextResponse.json({ data: config || DEFAULT_ROTATION_CONFIG });
   } catch (e) {
     console.error('[scheduling-config GET]', e);
     const msg = e instanceof Error ? e.message : String(e);
@@ -40,12 +44,11 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: '请求体不是合法 JSON' }, { status: 400 });
     }
 
-    const config = validateWeightsConfig(body);
+    const config = validateRotationConfig(body);
     if (!config) {
       return NextResponse.json({ error: '配置格式不正确' }, { status: 400 });
     }
 
-    // 范围二次校验（validateWeightsConfig 已校验各因子权重，这里只做名额额外检查）
     if (config.dailySlots < 1 || config.dailySlots > 10) {
       return NextResponse.json({ error: '每日名额必须在 1-10 之间' }, { status: 400 });
     }

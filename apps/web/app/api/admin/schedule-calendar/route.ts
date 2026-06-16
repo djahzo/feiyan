@@ -2,62 +2,55 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getAdminFromRequest } from '@/lib/admin-session';
 import { listCaptains, listHostingTodos, getSiteSetting } from '@/lib/db';
-import {
-  getTopRecommendations,
-  DEFAULT_ROTATION_CONFIG,
-  validateRotationConfig,
-} from '@/lib/scheduling-rotation';
+import { DEFAULT_ROTATION_CONFIG, validateRotationConfig } from '@/lib/scheduling-rotation';
+import { generateScheduleCalendar } from '@/lib/scheduling-calendar';
+import { todayIsoDate } from '@/lib/hosting-week-utils';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const SETTING_KEY = 'scheduling_rotation_config';
-/** 旧版权重模型的存储 key，仅用于一次性迁移读取 */
 const LEGACY_SETTING_KEY = 'scheduling_weights_config';
 
+/**
+ * GET /api/admin/schedule-calendar
+ * 生成未来 N 天的推荐排班日历
+ *
+ * Query params:
+ *   - startDate: ISO 日期（默认今天）
+ *   - days: 天数（默认 14）
+ */
 export async function GET(req: NextRequest) {
   try {
     const session = await getAdminFromRequest(req);
     if (!session) return NextResponse.json({ error: '未登录' }, { status: 401 });
 
     const { searchParams } = new URL(req.url);
-    const topN = parseInt(searchParams.get('top') || '10', 10);
-    const includeExcluded = searchParams.get('includeExcluded') === '1';
+    const startDate = searchParams.get('startDate') || todayIsoDate();
+    const days = parseInt(searchParams.get('days') || '14', 10);
 
     const captains = await listCaptains();
     const todos = await listHostingTodos();
 
-    // 优先读新 key；缺失时回退旧 key（兼容字段名）
     const saved = await getSiteSetting(SETTING_KEY);
     const legacy = saved ? null : await getSiteSetting(LEGACY_SETTING_KEY);
-    const config = validateRotationConfig(saved ?? legacy);
-    const rotationConfig = config || DEFAULT_ROTATION_CONFIG;
+    const config = validateRotationConfig(saved ?? legacy) || DEFAULT_ROTATION_CONFIG;
 
-    if (!rotationConfig.enabled) {
+    if (!config.enabled) {
       return NextResponse.json({
         data: [],
         message: '智能排期功能已禁用',
-        config: rotationConfig,
       });
     }
 
-    const recommendations = getTopRecommendations(
-      captains,
-      todos,
-      Number.isFinite(topN) && topN > 0 ? topN : 10,
-      rotationConfig,
-      includeExcluded,
-    );
+    const calendar = generateScheduleCalendar(captains, todos, config, startDate, days);
 
-    return NextResponse.json({
-      data: recommendations,
-      config: rotationConfig,
-    });
+    return NextResponse.json({ data: calendar, config });
   } catch (e) {
-    console.error('[recommendations GET]', e);
+    console.error('[schedule-calendar GET]', e);
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json(
-      { error: process.env.NODE_ENV === 'development' ? `推荐失败: ${msg}` : '获取推荐失败' },
+      { error: process.env.NODE_ENV === 'development' ? `生成日历失败: ${msg}` : '生成日历失败' },
       { status: 500 },
     );
   }
