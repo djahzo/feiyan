@@ -14,6 +14,7 @@ type BatchImportItem = {
   date: string;
   roleName: string;
   hostType?: string;
+  captainId?: number | null;
 };
 
 /**
@@ -21,7 +22,7 @@ type BatchImportItem = {
  * 批量导入排班（来自智能排期日历）
  *
  * Body:
- *   - items: BatchImportItem[]
+ *   - items: BatchImportItem[]（含 captainId 用于关联舰长）
  *   - skipConflicts: boolean (冲突时跳过该条，默认 false = 遇冲突整体回滚)
  */
 export async function POST(req: NextRequest) {
@@ -55,10 +56,14 @@ export async function POST(req: NextRequest) {
       if (!roleName) {
         return NextResponse.json({ error: `第 ${i + 1} 条角色名为空` }, { status: 400 });
       }
+      const capIdRaw = it.captainId;
+      const captainId =
+        capIdRaw == null || capIdRaw === '' || !Number.isFinite(Number(capIdRaw)) ? null : Number(capIdRaw);
       parsed.push({
         date,
         roleName,
         hostType: typeof it.hostType === 'string' ? it.hostType : DEFAULT_HOST_TYPE,
+        captainId,
       });
     }
 
@@ -74,7 +79,7 @@ export async function POST(req: NextRequest) {
 
       if (conflict.sameDayBlocked) {
         if (skipConflicts) {
-          results.push({ ...item, status: 'skipped', reason: '当日已有该舰长' });
+          results.push({ date: item.date, roleName: item.roleName, status: 'skipped', reason: '当日已有该舰长' });
           continue;
         } else {
           return NextResponse.json(
@@ -91,10 +96,11 @@ export async function POST(req: NextRequest) {
         role_name: item.roleName,
         host_type: hostType,
         stuck_task: 0,
+        captain_id: item.captainId ?? null,
       });
 
       created.push(id);
-      results.push({ ...item, status: 'created' });
+      results.push({ date: item.date, roleName: item.roleName, status: 'created' });
 
       // 模拟追加到 existingTodos，避免同一批次内重复
       existingTodos.push({
@@ -104,6 +110,7 @@ export async function POST(req: NextRequest) {
         host_type: hostType,
         stuck_task: 0,
         sort_order: 0,
+        captain_id: item.captainId ?? null,
         created_at: Date.now(),
         updated_at: Date.now(),
       });

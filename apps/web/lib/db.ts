@@ -106,6 +106,11 @@ function migrateHostingTodosColumns(db: Database): boolean {
     db.run('ALTER TABLE hosting_todos ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0');
     changed = true;
   }
+  if (!cols.has('captain_id')) {
+    // 关联舰长唯一 id；旧数据为 null（无法回填简称）
+    db.run('ALTER TABLE hosting_todos ADD COLUMN captain_id INTEGER');
+    changed = true;
+  }
   return changed;
 }
 
@@ -120,6 +125,7 @@ function ensureHostingTodosSchema(db: Database): boolean {
         host_type TEXT NOT NULL,
         stuck_task INTEGER NOT NULL DEFAULT 0,
         sort_order INTEGER NOT NULL DEFAULT 0,
+        captain_id INTEGER,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       );
@@ -534,6 +540,7 @@ export type HostingTodoRow = {
   host_type: string;
   stuck_task: number;
   sort_order: number;
+  captain_id: number | null;
   created_at: number;
   updated_at: number;
 };
@@ -541,6 +548,7 @@ export type HostingTodoRow = {
 function readHostingTodoRow(raw: Record<string, unknown>): HostingTodoRow {
   const rawHt = String(raw.host_type ?? '').trim();
   const host_type = rawHt === 'scan' || rawHt === 'group' ? rawHt : 'scan';
+  const capId = raw.captain_id;
   return {
     id: Number(raw.id),
     todo_date: String(raw.todo_date ?? ''),
@@ -548,6 +556,7 @@ function readHostingTodoRow(raw: Record<string, unknown>): HostingTodoRow {
     host_type,
     stuck_task: Number(raw.stuck_task ?? 0) ? 1 : 0,
     sort_order: Number(raw.sort_order ?? 0),
+    captain_id: capId == null || capId === '' ? null : Number(capId),
     created_at: Number(raw.created_at ?? 0),
     updated_at: Number(raw.updated_at ?? 0),
   };
@@ -591,7 +600,7 @@ export async function setHostingLeaveDate(leaveDate: string, onLeave: boolean): 
 export async function listHostingTodos(): Promise<HostingTodoRow[]> {
   const db = await getHostingTodosDb();
   const stmt = db.prepare(
-    'SELECT id, todo_date, role_name, host_type, stuck_task, sort_order, created_at, updated_at FROM hosting_todos ORDER BY todo_date ASC, sort_order ASC, id ASC',
+    'SELECT id, todo_date, role_name, host_type, stuck_task, sort_order, captain_id, created_at, updated_at FROM hosting_todos ORDER BY todo_date ASC, sort_order ASC, id ASC',
   );
   const rows: HostingTodoRow[] = [];
   while (stmt.step()) {
@@ -604,7 +613,7 @@ export async function listHostingTodos(): Promise<HostingTodoRow[]> {
 export async function getHostingTodoById(id: number): Promise<HostingTodoRow | null> {
   const db = await getHostingTodosDb();
   const stmt = db.prepare(
-    'SELECT id, todo_date, role_name, host_type, stuck_task, sort_order, created_at, updated_at FROM hosting_todos WHERE id = ?',
+    'SELECT id, todo_date, role_name, host_type, stuck_task, sort_order, captain_id, created_at, updated_at FROM hosting_todos WHERE id = ?',
   );
   stmt.bind([id]);
   if (!stmt.step()) {
@@ -621,13 +630,15 @@ export async function createHostingTodo(input: {
   role_name: string;
   host_type: string;
   stuck_task: number;
+  captain_id?: number | null;
 }): Promise<number> {
   const db = await getHostingTodosDb();
   const now = Date.now();
   const nextOrder = maxSortOrderOnDate(db, input.todo_date) + 1;
+  const captainId = input.captain_id == null ? null : Number(input.captain_id);
   db.run(
-    'INSERT INTO hosting_todos (todo_date, role_name, host_type, stuck_task, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [input.todo_date, input.role_name, input.host_type, input.stuck_task ? 1 : 0, nextOrder, now, now],
+    'INSERT INTO hosting_todos (todo_date, role_name, host_type, stuck_task, sort_order, captain_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [input.todo_date, input.role_name, input.host_type, input.stuck_task ? 1 : 0, nextOrder, captainId, now, now],
   );
   const rid = db.exec('SELECT last_insert_rowid() AS id');
   const id = Number(rid[0]?.values[0]?.[0] ?? 0);

@@ -141,7 +141,7 @@ function CollapseChevron({ open, className = '', size = 'md' }: { open: boolean;
 type ApiErrJson = { error?: string; code?: string; requiresConfirm?: boolean };
 
 type PendingWeek =
-  | { kind: 'post'; body: { todoDate: string; roleName: string; hostType: string; stuckTask: boolean } }
+  | { kind: 'post'; body: { todoDate: string; roleName: string; hostType: string; stuckTask: boolean; captainId?: number } }
   | { kind: 'put'; id: number; body: Record<string, unknown> };
 
 function toSchedulingRows(list: HostingTodoDto[]) {
@@ -368,7 +368,7 @@ export default function HostingTodoBoard() {
     if (!res.ok) throw new Error(body.error || '排序失败');
   }
 
-  async function executePost(body: { todoDate: string; roleName: string; hostType: string; stuckTask: boolean; confirmWeekOverlap?: boolean }) {
+  async function executePost(body: { todoDate: string; roleName: string; hostType: string; stuckTask: boolean; captainId?: number; confirmWeekOverlap?: boolean }) {
     const res = await fetch('/api/admin/hosting-todos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -383,7 +383,7 @@ export default function HostingTodoBoard() {
       if (res.status === 409 && j.code === 'WEEK_ROLE_OVERLAP') {
         setPendingWeek({
           kind: 'post',
-          body: { todoDate: body.todoDate, roleName: body.roleName, hostType: body.hostType, stuckTask: body.stuckTask },
+          body: { todoDate: body.todoDate, roleName: body.roleName, hostType: body.hostType, stuckTask: body.stuckTask, captainId: body.captainId },
         });
         return false;
       }
@@ -414,13 +414,13 @@ export default function HostingTodoBoard() {
   }
 
   /** 新建托管条目（右侧舰长拖入等）；冲突时 setError / setPendingWeek */
-  async function submitNewHostingEntry(input: { todoDate: string; roleName: string; hostType: HostType; stuckTask: boolean }) {
+  async function submitNewHostingEntry(input: { todoDate: string; roleName: string; hostType: HostType; stuckTask: boolean; captainId?: number }) {
     const role = input.roleName.trim();
     if (!role) {
       setError('角色名不能为空');
       return;
     }
-    const payload = { todoDate: input.todoDate, roleName: role, hostType: input.hostType, stuckTask: input.stuckTask };
+    const payload = { todoDate: input.todoDate, roleName: role, hostType: input.hostType, stuckTask: input.stuckTask, captainId: input.captainId };
     const c = analyzeRoleScheduleConflict(toSchedulingRows(rows), {
       targetDate: input.todoDate,
       roleName: role,
@@ -564,7 +564,7 @@ export default function HostingTodoBoard() {
 
   function onDragStartCaptain(e: React.DragEvent, c: CaptainApiDto) {
     const roleName = captainScheduleName(c);
-    e.dataTransfer.setData(MIME_CAPTAIN, JSON.stringify({ roleName }));
+    e.dataTransfer.setData(MIME_CAPTAIN, JSON.stringify({ roleName, captainId: c.id }));
     e.dataTransfer.setData('text/plain', roleName);
     e.dataTransfer.effectAllowed = 'copy';
   }
@@ -577,8 +577,11 @@ export default function HostingTodoBoard() {
 
   async function onDropCaptainOnDate(targetDate: string, capRaw: string) {
     let roleName = '';
+    let captainId: number | undefined;
     try {
-      roleName = (JSON.parse(capRaw) as { roleName?: string }).roleName ?? '';
+      const parsed = JSON.parse(capRaw) as { roleName?: string; captainId?: number };
+      roleName = parsed.roleName ?? '';
+      captainId = typeof parsed.captainId === 'number' ? parsed.captainId : undefined;
     } catch {
       return;
     }
@@ -590,6 +593,7 @@ export default function HostingTodoBoard() {
         roleName,
         hostType: DRAG_IN_HOST_TYPE,
         stuckTask: DRAG_IN_STUCK,
+        captainId,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : '添加失败');

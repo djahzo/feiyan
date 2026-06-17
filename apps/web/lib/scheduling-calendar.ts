@@ -68,19 +68,13 @@ export function generateSinglePeriod(
 
     // 重新计算队列（基于 allTodos + 本周期已模拟的新待办）
     const currentTodos = [...allTodos, ...newVirtualTodos];
-
-    // 调试：打印累积待办数和前5个人的债务
-    if (i === 0 || i === 4) {
-      console.log(`[${date}] 累积待办数: ${accumulatedTodos.length}, 本周期已排: ${newVirtualTodos.length}`);
-    }
-
     const queue = getRotationQueue(captains, currentTodos, config);
     const eligible = queue.filter((c) => !c.excluded);
 
     // 取前 dailySlots 个
     const picked = eligible.slice(0, config.dailySlots);
 
-    // 模拟追加到虚拟待办
+    // 模拟追加到虚拟待办（必须带 captain_id，债务模型才能计数）
     picked.forEach((cap) => {
       newVirtualTodos.push({
         id: -1,
@@ -89,6 +83,7 @@ export function generateSinglePeriod(
         host_type: 'daily',
         stuck_task: 0,
         sort_order: 0,
+        captain_id: cap.captainId,
         created_at: Date.now(),
         updated_at: Date.now(),
       });

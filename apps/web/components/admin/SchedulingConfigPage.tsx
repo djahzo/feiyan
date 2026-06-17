@@ -153,7 +153,7 @@ export default function SchedulingConfigPage() {
     if (!period) return;
 
     const items = period.days.flatMap((day) =>
-      day.recommendations.map((cap) => ({ date: day.date, roleName: cap.displayName })),
+      day.recommendations.map((cap) => ({ date: day.date, roleName: cap.displayName, captainId: cap.captainId })),
     );
 
     if (items.length === 0) {

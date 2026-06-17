@@ -5,20 +5,22 @@
  *   这不是"推荐算法"，是"轮值队列" — 每位舰长付了同样的钱，系统欠他们的是公平轮到的机会。
  *
  * 设计：
- *   1. 主排序：需求债务 = (每日名额/舰长总数) × 加入天数 - 已托管次数
- *      → 正值 = 系统欠这个舰长的轮值次数
- *      → 负值 = 这个舰长已超额托管
+ *   1. 主排序：需求债务 = 全体平均托管次数 - 本人已托管次数
+ *      → 正值 = 系统欠这个舰长的轮值次数（低于平均）
+ *      → 负值 = 这个舰长已超额托管（高于平均）
  *      → 债务最高的排最前
+ *      （放弃"加入天数"维度——该数据不可靠/获取不到）
  *
- *   2. Tiebreaker：当债务相等时，距上次托管天数长的优先
+ *   2. Tiebreaker：
+ *      a. 债务相等 → 距上次托管天数长的优先（从未托管视为最久）
+ *      b. 仍相等 → captain.id 升序（稳定排序，避免随机抖动）
  *
- *   3. 硬过滤：不参与打分，直接剔除
- *      - 过期舰长（可选）
- *      - 本周已排过（可选）
- *      - 本月已排过（可选）
+ *   3. 匹配：托管记录通过 captain_id 关联舰长（唯一 id），不再用 role_name 简称
  *
- *   4. 其他因子（舰长等级、头像、数据完整性、卡任务历史）不影响排序
- *      → 这些是"质量标签"，不是"轮值资格"
+ *   4. 硬过滤：不参与打分，直接剔除
+ *      - 过期舰长 / 本周已排 / 本月已排（均可选）
+ *
+ *   5. 其他因子（等级、头像、数据完整性、卡任务）不影响排序，仅作展示标签
  */
 
 import type { CaptainRow, HostingTodoRow } from './db';
@@ -60,7 +62,7 @@ export type CaptainRotationStatus = {
   uid: string;
   displayName: string;
 
-  /** 需求债务 = (每日名额/舰长总数) × 加入天数 - 已托管次数 */
+  /** 需求债务 = 全体平均托管次数 - 本人已托管次数 */
   demandDebt: number;
 
   /** 距上次托管天数（null = 从未托管） */
@@ -71,7 +73,6 @@ export type CaptainRotationStatus = {
   excludeReason: string | null;
 
   // ===== 透明化数据（供展示 / 审计） =====
-  daysSinceJoin: number;
   totalHostingCount: number;
   weekHostingCount: number;
   monthHostingCount: number;
@@ -92,12 +93,6 @@ function daysBetween(date1: string, date2: string): number {
   const d1 = new Date(date1);
   const d2 = new Date(date2);
   return Math.floor(Math.abs(d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-function daysSinceTimestamp(ts: number | null | undefined): number {
-  if (!ts || !Number.isFinite(ts)) return 0;
-  const diffMs = Date.now() - ts;
-  return diffMs < 0 ? 0 : Math.floor(diffMs / (1000 * 60 * 60 * 24));
 }
 
 function getCaptainDisplayName(captain: CaptainRow): string {
@@ -121,14 +116,9 @@ function getDataCompletenessScore(captain: CaptainRow): number {
   return s;
 }
 
+/** 通过 captain_id 关联托管记录（唯一 id 匹配，不再用 role_name 简称） */
 function findCaptainTodos(captain: CaptainRow, todos: HostingTodoRow[]): HostingTodoRow[] {
-  const displayName = getCaptainDisplayName(captain);
-  return todos.filter(
-    (t) =>
-      t.role_name === displayName ||
-      (captain.remark_name && t.role_name === captain.remark_name) ||
-      (captain.id_name && t.role_name === captain.id_name),
-  );
+  return todos.filter((t) => t.captain_id === captain.id);
 }
 
 function countWeekHosting(todos: HostingTodoRow[]): number {
@@ -150,13 +140,13 @@ function hasStuckHistory(todos: HostingTodoRow[]): boolean {
 
 /**
  * 计算单个舰长的轮值状态
- * @param activeCaptainCount 当前活跃舰长总数（用于债务公式）
+ * @param avgHostingCount 全体舰长的平均托管次数（债务基线）
  */
 export function calculateCaptainRotationStatus(
   captain: CaptainRow,
   todos: HostingTodoRow[],
   config: SchedulingRotationConfig,
-  activeCaptainCount: number,
+  avgHostingCount: number,
 ): CaptainRotationStatus {
   const today = todayIsoDate();
   const displayName = getCaptainDisplayName(captain);
@@ -166,7 +156,6 @@ export function calculateCaptainRotationStatus(
   const totalHostingCount = captainTodos.length;
 
   // 时间统计
-  const daysSinceJoin = daysSinceTimestamp(captain.created_at);
   const sortedDates = captainTodos.map((t) => t.todo_date).sort();
   const lastHostingDate = sortedDates.length ? sortedDates[sortedDates.length - 1] : null;
   const firstHostingDate = sortedDates.length ? sortedDates[0] : null;
@@ -179,9 +168,9 @@ export function calculateCaptainRotationStatus(
   const hasStuckTaskHistory = hasStuckHistory(captainTodos);
   const dataCompleteness = getDataCompletenessScore(captain);
 
-  // **核心债务计算：(每日名额 / 舰长总数) × 加入天数 - 已托管次数**
-  const dailyRate = config.dailySlots / Math.max(activeCaptainCount, 1);
-  const demandDebt = dailyRate * daysSinceJoin - totalHostingCount;
+  // **核心债务计算：全体平均托管次数 - 本人已托管次数**
+  // 正值 = 低于平均（系统欠他轮值），负值 = 超额托管
+  const demandDebt = avgHostingCount - totalHostingCount;
 
   // 硬过滤
   let excluded = false;
@@ -206,7 +195,6 @@ export function calculateCaptainRotationStatus(
     daysSinceLastHosting,
     excluded,
     excludeReason,
-    daysSinceJoin,
     totalHostingCount,
     weekHostingCount,
     monthHostingCount,
@@ -227,7 +215,9 @@ export function calculateCaptainRotationStatus(
  *
  * 排序规则：
  *   1. 未排除的在前，已排除的在后
- *   2. 未排除的按：债务降序 → 距上次托管天数降序
+ *   2. 主键：债务降序（欠得越多越优先）
+ *   3. Tiebreaker a：距上次托管天数降序（从未托管视为最久 = Infinity）
+ *   4. Tiebreaker b：captain.id 升序（稳定，避免随机抖动）
  */
 export function getRotationQueue(
   captains: CaptainRow[],
@@ -236,9 +226,14 @@ export function getRotationQueue(
 ): CaptainRotationStatus[] {
   if (!config.enabled) return [];
 
-  const activeCaptainCount = captains.length;
+  // 债务基线：全体平均托管次数 = 关联到任一舰长的托管记录数 / 舰长总数
+  const activeCaptainCount = Math.max(captains.length, 1);
+  const captainIds = new Set(captains.map((c) => c.id));
+  const matchedTodoCount = todos.filter((t) => t.captain_id != null && captainIds.has(t.captain_id)).length;
+  const avgHostingCount = matchedTodoCount / activeCaptainCount;
+
   const statuses = captains.map((cap) =>
-    calculateCaptainRotationStatus(cap, todos, config, activeCaptainCount),
+    calculateCaptainRotationStatus(cap, todos, config, avgHostingCount),
   );
 
   return statuses.sort((a, b) => {
@@ -250,10 +245,13 @@ export function getRotationQueue(
       return b.demandDebt - a.demandDebt;
     }
 
-    // Tiebreaker：距上次托管天数降序（null 视为无穷大，即从未托管优先）
+    // Tiebreaker a：距上次托管天数降序（null 视为无穷大，即从未托管优先）
     const aDays = a.daysSinceLastHosting ?? Infinity;
     const bDays = b.daysSinceLastHosting ?? Infinity;
-    return bDays - aDays;
+    if (aDays !== bDays) return bDays - aDays;
+
+    // Tiebreaker b：captain.id 升序（稳定排序，消除随机抖动）
+    return a.captainId - b.captainId;
   });
 }
 

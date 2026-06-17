@@ -59,6 +59,12 @@ export async function POST(req: NextRequest) {
   const host_type = ht ?? DEFAULT_HOST_TYPE;
   const stuck = Boolean(o.stuckTask);
   const confirmWeek = Boolean(o.confirmWeekOverlap);
+  // 关联舰长唯一 id（拖入舰长池时携带；手动输入角色名时为空）
+  const captainIdRaw = o.captainId;
+  const captain_id =
+    captainIdRaw == null || captainIdRaw === '' || !Number.isFinite(Number(captainIdRaw))
+      ? null
+      : Number(captainIdRaw);
 
   const all = await listHostingTodos();
   const conflict = analyzeRoleScheduleConflict(all, { targetDate: todoDate, roleName, excludeId: undefined });
@@ -84,6 +90,7 @@ export async function POST(req: NextRequest) {
     role_name: roleName,
     host_type,
     stuck_task: stuck ? 1 : 0,
+    captain_id,
   });
   return NextResponse.json({ ok: true, data: { id } });
 }
