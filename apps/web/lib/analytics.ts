@@ -60,6 +60,7 @@ function daysBetween(date1: string, date2: string): number {
 
 /**
  * 分析舰长托管频率
+ * 仅统计已发生的托管（todo_date <= 今天），不计入未来排期
  */
 export function analyzeCaptainFrequency(
   todos: HostingTodoRow[],
@@ -68,7 +69,8 @@ export function analyzeCaptainFrequency(
 ): CaptainFrequencyStats[] {
   const today = todayIsoDate();
   const start = startDate || '2000-01-01';
-  const end = endDate || '2099-12-31';
+  // 结束日期不超过今天（防止用户选未来日期把预排算成"已托管"）
+  const end = endDate && endDate <= today ? endDate : today;
 
   // 过滤时间范围
   const filtered = todos.filter((t) => t.todo_date >= start && t.todo_date <= end);
@@ -196,6 +198,7 @@ export function analyzeHostTypeDistribution(
 /**
  * 获取扫号频率 Top 10
  * 按历史累计扫号次数降序，同频率的按距今最久排序
+ * 仅统计已发生的托管（todo_date <= 今天），不计入未来排期
  */
 export function getTopScanFrequency(
   todos: HostingTodoRow[],
@@ -203,10 +206,13 @@ export function getTopScanFrequency(
 ): CaptainFrequencyStats[] {
   const today = todayIsoDate();
 
+  // 仅统计已发生的托管（不计未来日期的预排）
+  const pastTodos = todos.filter((t) => t.todo_date <= today);
+
   // 按舰长分组统计
   const statsMap = new Map<string, CaptainFrequencyStats>();
 
-  for (const todo of todos) {
+  for (const todo of pastTodos) {
     const name = todo.role_name;
     let stats = statsMap.get(name);
 
