@@ -103,7 +103,7 @@ function reorderIds(ids: number[], dragId: number, targetId: number, place: 'bef
   return arr;
 }
 
-/** 三角洲任务板风格色板 */
+/** 任务板风格色板 */
 const th = {
   page: 'bg-[#080a0d] text-[#d4cfc4]',
   panel: 'bg-[#0f1218] border border-[#1e2633]',

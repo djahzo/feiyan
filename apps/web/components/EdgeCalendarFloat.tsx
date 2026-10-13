@@ -588,7 +588,7 @@ export default function EdgeCalendarFloat() {
 
       {/* —— 桌面端：右侧贴边展开（原交互） —— */}
       <div className="pointer-events-none fixed bottom-24 right-0 z-[85] hidden md:block md:bottom-28">
-        <div className="pointer-events-auto flex flex-row-reverse items-end shadow-[0_16px_48px_-12px_rgba(0,0,0,0.22)]">
+        <div className="pointer-events-auto flex flex-row-reverse items-end">
           {triggerBtn}
 
           <div

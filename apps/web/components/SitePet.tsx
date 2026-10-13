@@ -67,6 +67,7 @@ export default function SitePet({ liveActive = false }: { liveActive?: boolean }
   const alphaCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const alphaCanvasCacheRef = useRef<Map<string, HTMLCanvasElement>>(new Map());
   const dragRef = useRef<DragState | null>(null);
+  const rafRef = useRef<number | null>(null);
   const currentFrameRef = useRef<PetFrame>(moodFrames.idle);
   const currentGridRef = useRef({ cols: PET_SHEET_COLS, rows: PET_SHEET_ROWS });
   const suppressClickRef = useRef<{ x: number; y: number; ts: number } | null>(null);
@@ -102,6 +103,9 @@ export default function SitePet({ liveActive = false }: { liveActive?: boolean }
   const petBoxSize = useMemo(() => getPetBoxSize(mood, size), [mood, size]);
   const actionAspectRatio = action.aspectRatio ?? '1 / 1';
   const moodRef = useRef(mood);
+  const posRef = useRef(pos);
+  const petBoxSizeRef = useRef(petBoxSize);
+
   const {
     setPetBehavior,
     returnToBaseBehavior,
@@ -124,6 +128,14 @@ export default function SitePet({ liveActive = false }: { liveActive?: boolean }
     moodRef.current = mood;
   }, [mood]);
 
+  useEffect(() => {
+    posRef.current = pos;
+  }, [pos]);
+
+  useEffect(() => {
+    petBoxSizeRef.current = petBoxSize;
+  }, [petBoxSize]);
+
   const hitPet = useCallback((clientX: number, clientY: number) => {
     const box = petBoxRef.current;
     const canvas = alphaCanvasRef.current;
@@ -132,6 +144,8 @@ export default function SitePet({ liveActive = false }: { liveActive?: boolean }
     const rect = box.getBoundingClientRect();
     if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return false;
 
+    // 快速路径：只检测边界框，避免昂贵的像素检测
+    // 仅在必要时（如非矩形形状需要精确检测）才读取像素数据
     const frame = currentFrameRef.current;
     const { cols, rows } = currentGridRef.current;
     const cellW = canvas.width / cols;
@@ -140,7 +154,9 @@ export default function SitePet({ liveActive = false }: { liveActive?: boolean }
     const y = Math.floor(frame.row * cellH + ((clientY - rect.top) / rect.height) * cellH);
     if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return false;
 
-    const alpha = canvas.getContext('2d')?.getImageData(x, y, 1, 1).data[3] ?? 0;
+    // 缓存 context 避免重复获取
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const alpha = ctx?.getImageData(x, y, 1, 1).data[3] ?? 0;
     return alpha > 28;
   }, [hidden]);
 
@@ -288,8 +304,8 @@ export default function SitePet({ liveActive = false }: { liveActive?: boolean }
         pointerId: event.pointerId,
         startX: event.clientX,
         startY: event.clientY,
-        offsetX: event.clientX - pos.x,
-        offsetY: event.clientY - pos.y,
+        offsetX: event.clientX - posRef.current.x,
+        offsetY: event.clientY - posRef.current.y,
         part,
         moved: false,
       };
@@ -312,11 +328,11 @@ export default function SitePet({ liveActive = false }: { liveActive?: boolean }
       }
       if (drag.moved) {
         event.preventDefault();
-        setPos(clampPosition({ x: event.clientX - drag.offsetX, y: event.clientY - drag.offsetY }, petBoxSize));
-        if (!liveActive && mood !== dragMoodByPart[drag.part]) {
+        setPos(clampPosition({ x: event.clientX - drag.offsetX, y: event.clientY - drag.offsetY }, petBoxSizeRef.current));
+        if (!liveActive && moodRef.current !== dragMoodByPart[drag.part]) {
           setPetBehavior('drag', dragMoodByPart[drag.part], { force: true });
         }
-        if (liveActive && mood !== 'live') setPetBehavior('live', 'live', { force: true });
+        if (liveActive && moodRef.current !== 'live') setPetBehavior('live', 'live', { force: true });
       }
     };
 
@@ -361,21 +377,22 @@ export default function SitePet({ liveActive = false }: { liveActive?: boolean }
       suppressClickRef.current = null;
     };
 
-    document.addEventListener('pointerdown', onPointerDown, true);
-    document.addEventListener('pointermove', onPointerMove, true);
-    document.addEventListener('pointerup', onPointerUp, true);
-    document.addEventListener('pointercancel', onPointerUp, true);
-    document.addEventListener('contextmenu', onContextMenu, true);
-    document.addEventListener('click', onClick, true);
+    // 使用普通事件监听，不使用 capture，减少性能影响
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointerup', onPointerUp);
+    document.addEventListener('pointercancel', onPointerUp);
+    document.addEventListener('contextmenu', onContextMenu);
+    document.addEventListener('click', onClick);
     return () => {
-      document.removeEventListener('pointerdown', onPointerDown, true);
-      document.removeEventListener('pointermove', onPointerMove, true);
-      document.removeEventListener('pointerup', onPointerUp, true);
-      document.removeEventListener('pointercancel', onPointerUp, true);
-      document.removeEventListener('contextmenu', onContextMenu, true);
-      document.removeEventListener('click', onClick, true);
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('pointermove', onPointerMove);
+      document.removeEventListener('pointerup', onPointerUp);
+      document.removeEventListener('pointercancel', onPointerUp);
+      document.removeEventListener('contextmenu', onContextMenu);
+      document.removeEventListener('click', onClick);
     };
-  }, [hidden, hitPet, liveActive, mood, openMenuAtPet, petBoxSize.height, petBoxSize.width, pos.x, pos.y, resetSleepTimer, returnToBaseBehavior, say, setPetBehavior]);
+  }, [hidden, hitPet, liveActive, openMenuAtPet, resetSleepTimer, returnToBaseBehavior, say, setPetBehavior]);
 
   useEffect(() => {
     const buffer: string[] = [];
@@ -394,6 +411,7 @@ export default function SitePet({ liveActive = false }: { liveActive?: boolean }
     if (bubbleTimerRef.current) window.clearTimeout(bubbleTimerRef.current);
     if (sleepTimerRef.current) window.clearTimeout(sleepTimerRef.current);
     if (idleTimerRef.current) window.clearTimeout(idleTimerRef.current);
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
   }, []);
 
   if (hidden) {

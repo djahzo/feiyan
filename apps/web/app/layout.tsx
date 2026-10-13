@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: '斐延 · 商务主站',
-  description: 'B站UP主斐延商务合作展示页',
+  title: '斐延 · 个人主站',
+  description: 'B站UP主斐延的个人主页，分享游戏内容与攻略',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -165,7 +165,7 @@ export default function SiteConfigEditor() {
           <Field label="站点名称" hint="顶栏左侧主标题">
             <input className={c.input} value={cfg.siteName} onChange={e => setCfg({ ...cfg, siteName: e.target.value })} />
           </Field>
-          <Field label="顶栏副标题" hint="紧跟站点名称后展示，如「 · 商务主站」">
+          <Field label="顶栏副标题" hint="紧跟站点名称后展示，如「 · 个人主站」">
             <input className={c.input} value={cfg.headerSubtitle} onChange={e => setCfg({ ...cfg, headerSubtitle: e.target.value })} />
           </Field>
           <Field label="商务联系邮箱" hint="首页「商务询价」、邮件按钮、页脚邮箱均使用该地址">

@@ -1,7 +1,6 @@
 'use client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { BilibiliUserInfo, BilibiliVideo, BilibiliLiveStatus } from '@/types/bilibili';
-import ContactEmailAction from '@/components/ContactEmailAction';
 import EdgeCalendarFloat from '@/components/EdgeCalendarFloat';
 import SitePet from '@/components/SitePet';
 import { DEFAULT_SITE_CONFIG } from '@/lib/site-defaults';
@@ -96,10 +95,13 @@ export default function HomePage() {
     return () => window.clearInterval(timer);
   }, [refreshLiveStatus]);
 
-  const spaceUrl = useMemo(() => userInfo?.mid ? `https://space.bilibili.com/${userInfo.mid}` : 'https://www.bilibili.com', [userInfo?.mid]);
+  const spaceUrl = useMemo(() => {
+    const uid = userInfo?.mid || '14636839'; // 后备使用 .env.local 中的 BILIBILI_UID
+    return `https://space.bilibili.com/${uid}`;
+  }, [userInfo?.mid]);
   const petLiveActive = live?.live_status === 1 || petLivePreview;
   const heroSubtitle = (userInfo?.sign?.trim()) || cfg.defaultSign;
-  const faceUrl = userInfo?.face || '';
+  const faceUrl = userInfo?.face || '/default-avatar.jpg';
   const displayNick = userInfo?.name || cfg.siteName;
 
   return (
@@ -114,11 +116,10 @@ export default function HomePage() {
               {cfg.navLinks.map(l => <li key={l.href}><a href={l.href} className="hover:text-[#00A1D6]">{l.label}</a></li>)}
             </ul>
           </nav>
-          <ContactEmailAction
-            email={cfg.contactEmail}
+          <a href={spaceUrl} target="_blank" rel="noopener noreferrer"
             className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-[#333] transition hover:border-[#00A1D6] hover:text-[#00A1D6]">
-            商务询价
-          </ContactEmailAction>
+            B站主页
+          </a>
         </div>
       </header>
 
@@ -151,16 +152,17 @@ export default function HomePage() {
               ))}
             </div>
             <div className="mt-10 flex flex-wrap items-center gap-4">
-              <ContactEmailAction
-                email={cfg.contactEmail}
-                className="inline-flex rounded-lg bg-[#E8B84B] px-6 py-3 text-sm font-semibold text-black shadow-lg transition hover:brightness-110">
-                发商务邮件
-              </ContactEmailAction>
               <a href={spaceUrl} target="_blank" rel="noopener noreferrer"
-                className="text-sm font-medium text-white/80 underline-offset-4 hover:text-white hover:underline">
-                B 站频道
+                className="inline-flex rounded-lg bg-[#E8B84B] px-6 py-3 text-sm font-semibold text-black shadow-lg transition hover:brightness-110">
+                前往 B 站
               </a>
-              <a href="#biz" className="text-sm font-medium text-white/60 hover:text-white/90">合作流程 →</a>
+              {live?.live_status === 1 && live.url && (
+                <a href={live.url} target="_blank" rel="noopener noreferrer"
+                  className="text-sm font-medium text-white/80 underline-offset-4 hover:text-white hover:underline">
+                  正在直播
+                </a>
+              )}
+              <a href="#videos" className="text-sm font-medium text-white/60 hover:text-white/90">查看投稿</a>
             </div>
           </div>
           {faceUrl && (
@@ -172,47 +174,6 @@ export default function HomePage() {
               </div>
             </div>
           )}
-        </div>
-      </section>
-
-      <div className="border-y border-gray-100 bg-gray-50/80">
-        <div className="mx-auto flex max-w-5xl flex-wrap justify-center gap-8 px-4 py-6 text-center text-sm text-[#555] md:justify-between md:px-8 md:text-left">
-          <div><p className="text-xs uppercase tracking-wider text-[#888]">频道昵称</p><p className="mt-1 font-semibold text-[#222]">{loading ? '加载中…' : displayNick}</p></div>
-          <div><p className="text-xs uppercase tracking-wider text-[#888]">公开稿件</p><p className="mt-1 font-semibold text-[#222]">{loading ? '…' : `${videoTotal || videos.length} 支`}</p></div>
-          <div><p className="text-xs uppercase tracking-wider text-[#888]">商务联络</p><p className="mt-1 font-semibold text-[#222]">{cfg.contactBarLine}</p></div>
-        </div>
-      </div>
-
-      <section id="biz" className="scroll-mt-20 px-4 py-20 md:px-8">
-        <div className="mx-auto max-w-5xl">
-          <div className="mb-12 max-w-2xl">
-            <h2 className="text-2xl font-bold md:text-3xl">{cfg.bizSectionTitle}</h2>
-            <p className="mt-3 text-[#666]">{cfg.bizSectionIntro}</p>
-          </div>
-          <ol className="space-y-10 border-l-2 border-gray-200 pl-8 md:pl-10">
-            {cfg.bizBlocks.map(b => (
-              <li key={b.k} className="relative">
-                <span className="absolute -left-[2.125rem] top-0 flex h-8 w-8 items-center justify-center rounded-full bg-[#0A0E14] text-xs font-bold text-[#E8B84B] md:-left-[2.5rem]">{b.k}</span>
-                <h3 className="text-lg font-bold text-[#222]">{b.title}</h3>
-                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#666]">{b.body}</p>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </section>
-
-      <section id="trust" className="scroll-mt-20 bg-[#0A0E14] px-4 py-20 md:px-8">
-        <div className="mx-auto max-w-5xl">
-          <h2 className="text-2xl font-bold text-white md:text-3xl">{cfg.trustSectionTitle}</h2>
-          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/65">{cfg.trustSectionIntro}</p>
-          <div className="mt-10 grid gap-8 md:grid-cols-2">
-            {cfg.trustPoints.map(t => (
-              <div key={t.title} className="rounded-xl border border-white/10 bg-white/5 p-6">
-                <h3 className="font-semibold text-[#E8B84B]">{t.title}</h3>
-                <p className="mt-3 text-sm leading-relaxed text-white/85">{t.body}</p>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
@@ -243,7 +204,7 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-              {videos.map(v => (
+              {videos.slice(0, 6).map(v => (
                 <article key={v.bvid} className="group flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition hover:shadow-md">
                   <a href={`https://www.bilibili.com/video/${v.bvid}`} target="_blank" rel="noopener noreferrer" className="relative aspect-video overflow-hidden bg-gray-100">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -254,7 +215,7 @@ export default function HomePage() {
                     <h3 className="text-base font-bold leading-snug text-[#222] group-hover:text-[#00A1D6]">
                       <a href={`https://www.bilibili.com/video/${v.bvid}`} target="_blank" rel="noopener noreferrer">{v.title}</a>
                     </h3>
-                    <p className="mt-2 line-clamp-2 text-sm text-[#666]">{v.description || ' '}</p>
+                    <p className="mt-2 flex-1 line-clamp-2 text-sm text-[#666]">{v.description || ' '}</p>
                     <div className="mt-3 flex flex-wrap gap-3 text-xs text-[#999]">
                       <span>{fmtDate(v.created)}</span>
                       <span>{fmt(v.play)} 播放</span>
@@ -265,10 +226,19 @@ export default function HomePage() {
               ))}
             </div>
           )}
-          {userInfo?.mid && (
-            <p className="mt-10 text-center">
-              <a href={spaceUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-[#00A1D6] hover:underline">进入 B 站空间看全部稿件 →</a>
-            </p>
+          {videos.length > 0 && (
+            <div className="mt-10 text-center">
+              <a
+                href={spaceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-6 py-3 text-sm font-medium text-[#333] transition hover:border-[#00A1D6] hover:bg-gray-50 hover:text-[#00A1D6]">
+                查看全部{videoTotal > 0 ? ` ${videoTotal}` : ''} 支稿件
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </a>
+            </div>
           )}
         </div>
       </section>
@@ -281,14 +251,9 @@ export default function HomePage() {
               <p className="mt-1 text-sm text-[#666]">{cfg.footerTagline}</p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <ContactEmailAction
-                email={cfg.contactEmail}
-                className="inline-flex w-fit items-center rounded-lg bg-[#00A1D6] px-5 py-2.5 text-sm font-medium text-white hover:opacity-90">
-                {cfg.contactEmail}
-              </ContactEmailAction>
               {userInfo?.mid && (
                 <a href={spaceUrl} target="_blank" rel="noopener noreferrer"
-                  className="inline-flex w-fit items-center rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-[#333] hover:bg-gray-50">
+                  className="inline-flex w-fit items-center rounded-lg bg-[#00A1D6] px-5 py-2.5 text-sm font-medium text-white hover:opacity-90">
                   B 站主页
                 </a>
               )}
@@ -306,6 +271,10 @@ export default function HomePage() {
               </a>
             </p>
           )}
+          <p className="mt-3 text-center text-xs text-[#888] leading-relaxed max-w-3xl mx-auto">
+            本站为个人UP主展示页面，所涉及的游戏内容、截图、素材等版权归原游戏开发商及发行商所有。<br />
+            本站内容仅用于个人作品展示与交流学习，不用于商业用途。如有侵权，请联系删除。
+          </p>
           <p className="mt-2 text-center text-xs text-[#999]">
             Built with{' '}
             <a

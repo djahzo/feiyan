@@ -11,17 +11,17 @@ const CONTACT_EMAIL =
 
 const navLinks = [
   { href: '#intro', label: '简介' },
-  { href: '#biz', label: '商务合作' },
+  // { href: '#biz', label: '商务合作' },
   { href: '#trust', label: '合作说明' },
   { href: '#videos', label: '精选投稿' },
-  { href: '#contact', label: '联系' },
+  // { href: '#contact', label: '联系' },
 ];
 
 /** 默认英雄区副文案：三角洲战术射击向 + 商务可用语境（接口无签名时兜底） */
 const DEFAULT_SIGN_FALLBACK =
   '《三角洲行动》战术射击赛道内容创作：版本与枪械理解、地图与撤离节奏、搜打撤实战复盘。既做给玩家看，也方便品牌评估是否同频。';
 
-const heroPills = ['三角洲行动', '攻略 · 实况 · 复盘', '战术博弈', '直播 / 长线合作'];
+const heroPills = ['三角洲行动', '攻略 · 实况 · 复盘', '战术博弈', '直播'];
 
 const bizBlocks = [
   {
@@ -41,7 +41,6 @@ const bizBlocks = [
   },
 ];
 
-/** 不对具体甲方做虚假背书，改为商务主站常见的「合作原则」说明 */
 const trustPoints = [
   {
     title: '社区与规则优先',
@@ -132,7 +131,7 @@ const HomePage: React.FC = () => {
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3.5 md:px-8">
           <a href="#intro" className="font-bold tracking-tight">
             {SITE_NAME}
-            <span className="ml-2 hidden font-normal text-[#888] sm:inline">· 商务主站</span>
+            <span className="ml-2 hidden font-normal text-[#888] sm:inline">· 个人主站</span>
           </a>
           <nav className="hidden flex-1 justify-center md:flex">
             <ul className="flex gap-6 text-sm text-[#444] lg:gap-8">
@@ -212,7 +211,7 @@ const HomePage: React.FC = () => {
                 B 站频道
               </a>
               <a href="#biz" className="text-sm font-medium text-white/60 hover:text-white/90">
-                合作流程 →
+                合作流程
               </a>
             </div>
           </div>
@@ -408,7 +407,7 @@ const HomePage: React.FC = () => {
         <div className="mx-auto max-w-5xl px-4 py-14 md:px-8">
           <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="font-semibold text-[#222]">{SITE_NAME} · 商务主站</p>
+              <p className="font-semibold text-[#222]">{SITE_NAME} · 个人主站</p>
               <p className="mt-1 text-sm text-[#666]">
                 《三角洲行动》等内容向品牌合作 · 询价请邮件并注明品牌与大致档期
               </p>
