@@ -239,10 +239,23 @@ export function getTopScanFrequency(
     }
   }
 
-  // 计算距今天数
+  // 计算距今天数和平均间隔
   for (const stats of statsMap.values()) {
     if (stats.lastHostingDate) {
       stats.daysSinceLastHosting = daysBetween(stats.lastHostingDate, today);
+    }
+
+    // 计算平均间隔
+    if (stats.totalCount > 1 && stats.lastHostingDate) {
+      const allDates = pastTodos
+        .filter((t) => t.role_name === stats.roleName)
+        .map((t) => t.todo_date)
+        .sort();
+
+      if (allDates.length > 1) {
+        const totalSpan = daysBetween(allDates[0], allDates[allDates.length - 1]);
+        stats.avgDaysInterval = Math.round(totalSpan / (allDates.length - 1));
+      }
     }
   }
 
