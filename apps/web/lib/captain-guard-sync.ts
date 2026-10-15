@@ -8,6 +8,7 @@ export type GuardSyncResult = {
   updated: number;
   skippedNoTier: number;
   fetchedCount: number;
+  guardUids: string[];  // 当前榜单所有UID
   /** 给运营看的说明，不存库 */
   hint: string;
 };
@@ -64,6 +65,7 @@ export async function syncCaptainsFromBilibiliGuardTab(): Promise<GuardSyncResul
     updated,
     skippedNoTier,
     fetchedCount: members.length,
+    guardUids: members.map(m => m.uid),
     hint:
       '大航海榜单接口不提供精确的「开通/续费时间」或合同到期日；本站到期仍依赖你填写的「上舰时间」+ 档位周期推算。' +
       ' 已过期且已下榜的用户不会出现在本次拉取结果中，但库里原有记录不会被自动删除，可对照「到期」列手动清理或保留归档。',

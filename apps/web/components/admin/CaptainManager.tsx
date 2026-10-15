@@ -46,6 +46,7 @@ export default function CaptainManager() {
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [currentGuardUids, setCurrentGuardUids] = useState<Set<string>>(new Set());
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -242,7 +243,7 @@ export default function CaptainManager() {
       const res = await fetch('/api/admin/captains/sync-bilibili-guard', { method: 'POST', credentials: 'include' });
       const body = (await res.json()) as {
         error?: string;
-        data?: { created: number; updated: number; skippedNoTier: number; fetchedCount: number; hint: string };
+        data?: { created: number; updated: number; skippedNoTier: number; fetchedCount: number; hint: string; guardUids?: string[] };
       };
       if (!res.ok) throw new Error(body.error || '拉取失败');
       const d = body.data;
@@ -250,6 +251,12 @@ export default function CaptainManager() {
       const skipPart = d.skippedNoTier > 0 ? `，跳过无档位 ${d.skippedNoTier} 条` : '';
       setToast(`拉取完成：新增 ${d.created}，更新 ${d.updated}，榜单共 ${d.fetchedCount} 人${skipPart}`);
       setSyncHint(d.hint);
+
+      // 更新当前榜单UID集合
+      if (d.guardUids && Array.isArray(d.guardUids)) {
+        setCurrentGuardUids(new Set(d.guardUids));
+      }
+
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : '拉取失败');
@@ -389,7 +396,10 @@ export default function CaptainManager() {
                   </tr>
                 ) : (
                   rows.map(r => {
-                    const isExpired = r.expireStatus === 'expired';
+                    // 如果已拉取过榜单，则根据是否在榜单中判断；否则用expireStatus
+                    const isExpired = currentGuardUids.size > 0
+                      ? !currentGuardUids.has(r.uid)  // 不在当前榜单 = 已过期
+                      : r.expireStatus === 'expired';  // 回退到原有逻辑
                     const rowBg = isExpired ? 'bg-gray-50/80' : '';
                     return (
                       <tr key={r.id} className={`border-b ${c.line} last:border-0 ${c.hover} ${rowBg}`}>
