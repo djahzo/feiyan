@@ -182,8 +182,8 @@ export default function AnalyticsPage() {
             </div>
 
             <div className={c.card}>
-              <h3 className="text-lg font-semibold">扫号频率 Top 10</h3>
-              <p className="mt-1 text-xs text-[#9499a0]">按历史累计托管次数降序，同频率按距今最久排序</p>
+              <h3 className="text-lg font-semibold">扫号频率榜单</h3>
+              <p className="mt-1 text-xs text-[#9499a0]">按历史累计托管次数降序，同频率按距今最久排序（共 {summaryData.topScanFrequency.length} 位）</p>
               <div className="mt-4 overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="border-b border-[#e3e5e7]">
@@ -193,6 +193,7 @@ export default function AnalyticsPage() {
                       <th className="pb-2 font-medium text-[#61666d]">累计次数</th>
                       <th className="pb-2 font-medium text-[#61666d]">扫号</th>
                       <th className="pb-2 font-medium text-[#61666d]">组排</th>
+                      <th className="pb-2 font-medium text-[#61666d]">平均间隔</th>
                       <th className="pb-2 font-medium text-[#61666d]">最近托管</th>
                       <th className="pb-2 font-medium text-[#61666d]">距今天数</th>
                     </tr>
@@ -205,6 +206,9 @@ export default function AnalyticsPage() {
                         <td className="py-2 font-bold text-[#fb7299]">{d.totalCount}</td>
                         <td className="py-2 text-pink-600">{d.scanCount}</td>
                         <td className="py-2 text-blue-600">{d.groupCount}</td>
+                        <td className="py-2 text-[#9499a0]">
+                          {d.avgDaysInterval != null ? `${d.avgDaysInterval} 天/次` : '-'}
+                        </td>
                         <td className="py-2 text-[#61666d]">{d.lastHostingDate || '-'}</td>
                         <td className="py-2 text-[#9499a0]">{d.daysSinceLastHosting ?? '-'}</td>
                       </tr>
@@ -253,7 +257,9 @@ export default function AnalyticsPage() {
                         <td className="py-2 text-blue-600">{d.groupCount}</td>
                         <td className="py-2 text-[#61666d]">{d.lastHostingDate || '-'}</td>
                         <td className="py-2 text-[#9499a0]">{d.daysSinceLastHosting ?? '-'}</td>
-                        <td className="py-2 text-[#9499a0]">{d.avgDaysInterval ?? '-'}</td>
+                        <td className="py-2 text-[#9499a0]">
+                          {d.avgDaysInterval != null ? `${d.avgDaysInterval} 天/次` : '-'}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

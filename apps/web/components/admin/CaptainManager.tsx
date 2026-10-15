@@ -5,7 +5,7 @@ import { c } from '@/components/admin/admin-theme';
 import { fetchAdminCaptainsList } from '@/lib/admin-captains-list';
 import type { CaptainApiDto } from '@/lib/captain-dto';
 import { avatarLabelFromNote, captainAvatarImgReferrerPolicy, captainAvatarImgSrc } from '@/lib/captain-avatar-placeholder';
-import { NOTE_MAX_LEN, SHIP_TIER_LABEL, SHIP_TIERS, CONTACT_REMARK_MAX_LEN, type ShipTier } from '@/lib/captain-ship';
+import { NOTE_MAX_LEN, SHIP_TIER_LABEL, SHIP_TIERS, CONTACT_REMARK_MAX_LEN, type ShipTier, computeExpiresAtMs, expiresStatus } from '@/lib/captain-ship';
 import { validateContactRemark } from '@/lib/captain-parse';
 
 type CaptainDto = CaptainApiDto;
@@ -388,73 +388,77 @@ export default function CaptainManager() {
                     </td>
                   </tr>
                 ) : (
-                  rows.map(r => (
-                    <tr key={r.id} className={`border-b ${c.line} last:border-0 ${c.hover}`}>
-                      <td className="px-3 py-3">
-                        <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-[#e3e5e7] bg-[#f6f7f8]">
-                          {r.avatarUrl ? (
-                            <img
-                              src={captainAvatarImgSrc(r.avatarUrl, r.updatedAt)}
-                              alt=""
-                              referrerPolicy={captainAvatarImgReferrerPolicy(r.avatarUrl)}
-                              className="h-full w-full object-cover"
-                            />
+                  rows.map(r => {
+                    const isExpired = r.expireStatus === 'expired';
+                    const rowBg = isExpired ? 'bg-gray-50/80' : '';
+                    return (
+                      <tr key={r.id} className={`border-b ${c.line} last:border-0 ${c.hover} ${rowBg}`}>
+                        <td className="px-3 py-3">
+                          <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-[#e3e5e7] bg-[#f6f7f8]">
+                            {r.avatarUrl ? (
+                              <img
+                                src={captainAvatarImgSrc(r.avatarUrl, r.updatedAt)}
+                                alt=""
+                                referrerPolicy={captainAvatarImgReferrerPolicy(r.avatarUrl)}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              (() => {
+                                const label = avatarLabelFromNote(r.note);
+                                return label ? (
+                                  <span className="select-none px-0.5 text-center text-[11px] font-semibold leading-tight text-[#61666d]" title={r.note ?? ''}>
+                                    {label}
+                                  </span>
+                                ) : (
+                                  <span className={`text-[10px] ${c.sub}`}>无</span>
+                                );
+                              })()
+                            )}
+                          </div>
+                        </td>
+                        <td className={`px-3 py-3 font-mono text-[13px] ${c.text}`}>{r.uid}</td>
+                        <td className={`max-w-[100px] truncate px-3 py-3 ${r.idName ? c.text : c.sub}`}>{r.idName || '—'}</td>
+                        <td className={`max-w-[100px] truncate px-3 py-3 ${r.remarkName ? c.text : c.sub}`}>{r.remarkName || '—'}</td>
+                        <td className={`max-w-[100px] truncate px-3 py-3 text-xs ${r.wechatRemark ? c.text : c.sub}`} title={r.wechatRemark ?? ''}>
+                          {r.wechatRemark || '—'}
+                        </td>
+                        <td className={`max-w-[100px] truncate px-3 py-3 text-xs ${r.gameIdRemark ? c.text : c.sub}`} title={r.gameIdRemark ?? ''}>
+                          {r.gameIdRemark || '—'}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-3">
+                          {r.shipTierLabel ? (
+                            <span className="rounded-md bg-[#fff5f7] px-2 py-0.5 text-xs font-medium text-[#fb7299]">{r.shipTierLabel}</span>
                           ) : (
-                            (() => {
-                              const label = avatarLabelFromNote(r.note);
-                              return label ? (
-                                <span className="select-none px-0.5 text-center text-[11px] font-semibold leading-tight text-[#61666d]" title={r.note ?? ''}>
-                                  {label}
-                                </span>
-                              ) : (
-                                <span className={`text-[10px] ${c.sub}`}>无</span>
-                              );
-                            })()
+                            <span className={c.sub}>—</span>
                           )}
-                        </div>
-                      </td>
-                      <td className={`px-3 py-3 font-mono text-[13px] ${c.text}`}>{r.uid}</td>
-                      <td className={`max-w-[100px] truncate px-3 py-3 ${r.idName ? c.text : c.sub}`}>{r.idName || '—'}</td>
-                      <td className={`max-w-[100px] truncate px-3 py-3 ${r.remarkName ? c.text : c.sub}`}>{r.remarkName || '—'}</td>
-                      <td className={`max-w-[100px] truncate px-3 py-3 text-xs ${r.wechatRemark ? c.text : c.sub}`} title={r.wechatRemark ?? ''}>
-                        {r.wechatRemark || '—'}
-                      </td>
-                      <td className={`max-w-[100px] truncate px-3 py-3 text-xs ${r.gameIdRemark ? c.text : c.sub}`} title={r.gameIdRemark ?? ''}>
-                        {r.gameIdRemark || '—'}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-3">
-                        {r.shipTierLabel ? (
-                          <span className="rounded-md bg-[#fff5f7] px-2 py-0.5 text-xs font-medium text-[#fb7299]">{r.shipTierLabel}</span>
-                        ) : (
-                          <span className={c.sub}>—</span>
-                        )}
-                      </td>
-                      <td className={`whitespace-nowrap px-3 py-3 text-xs ${c.sub}`}>{formatDateTime(r.shippedAt)}</td>
-                      <td className="whitespace-nowrap px-3 py-3">{expireCell(r)}</td>
-                      <td className={`max-w-[160px] px-3 py-3 text-xs ${r.note ? c.text : c.sub}`}>
-                        {r.note ? (
-                          <span className="line-clamp-2" title={r.note}>
-                            {r.note}
-                          </span>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                      <td className={`whitespace-nowrap px-3 py-3 text-xs ${c.sub}`}>{formatTime(r.updatedAt)}</td>
-                      <td className="whitespace-nowrap px-3 py-3 text-right">
-                        <button type="button" className={`mr-2 text-sm ${c.link}`} onClick={() => openEdit(r)} disabled={busy}>
-                          编辑
-                        </button>
-                        <button
-                          type="button"
-                          className="text-sm text-[#e85a5a] hover:underline disabled:opacity-50"
-                          onClick={() => void removeRow(r.id)}
-                          disabled={busy}>
-                          删除
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className={`whitespace-nowrap px-3 py-3 text-xs ${c.sub}`}>{formatDateTime(r.shippedAt)}</td>
+                        <td className="whitespace-nowrap px-3 py-3">{expireCell(r)}</td>
+                        <td className={`max-w-[160px] px-3 py-3 text-xs ${r.note ? c.text : c.sub}`}>
+                          {r.note ? (
+                            <span className="line-clamp-2" title={r.note}>
+                              {r.note}
+                            </span>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                        <td className={`whitespace-nowrap px-3 py-3 text-xs ${c.sub}`}>{formatTime(r.updatedAt)}</td>
+                        <td className="whitespace-nowrap px-3 py-3 text-right">
+                          <button type="button" className={`mr-2 text-sm ${c.link}`} onClick={() => openEdit(r)} disabled={busy}>
+                            编辑
+                          </button>
+                          <button
+                            type="button"
+                            className="text-sm text-[#e85a5a] hover:underline disabled:opacity-50"
+                            onClick={() => void removeRow(r.id)}
+                            disabled={busy}>
+                            删除
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
