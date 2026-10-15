@@ -45,7 +45,7 @@ export type TimeRangeStats = {
   avgTodosPerDay: number;
   captainFrequencies: CaptainFrequencyStats[];
   hostTypeDistribution: HostTypeDistribution;
-  topScanFrequency: CaptainFrequencyStats[];  // 扫号频率 Top 10
+  topScanFrequency: CaptainFrequencyStats[];  // 扫号频率榜单（全部舰长）
 };
 
 /**
@@ -196,13 +196,13 @@ export function analyzeHostTypeDistribution(
 }
 
 /**
- * 获取扫号频率 Top 10
+ * 获取扫号频率榜单（全部舰长）
  * 按历史累计扫号次数降序，同频率的按距今最久排序
  * 仅统计已发生的托管（todo_date <= 今天），不计入未来排期
  */
 export function getTopScanFrequency(
   todos: HostingTodoRow[],
-  topN: number = 10
+  topN: number = 999999  // 默认返回全部
 ): CaptainFrequencyStats[] {
   const today = todayIsoDate();
 
@@ -269,7 +269,7 @@ export function getTimeRangeStats(
 
   const captainFrequencies = analyzeCaptainFrequency(todos, startDate, endDate);
   const hostTypeDistribution = analyzeHostTypeDistribution(todos, startDate, endDate);
-  const topScanFrequency = getTopScanFrequency(todos, 10);
+  const topScanFrequency = getTopScanFrequency(todos);  // 返回全部舰长
 
   const uniqueDates = new Set(filtered.map((t) => t.todo_date));
   const totalDays = daysBetween(startDate, endDate) + 1;
