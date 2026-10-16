@@ -64,14 +64,35 @@ export default function CaptainManager() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+
+    // 并行加载舰长列表和当前榜单
+    const [captainsRes, guardRes] = await Promise.allSettled([
+      fetchAdminCaptainsList(),
+      fetch('/api/admin/captains/current-guard-list', { credentials: 'include' })
+        .then(res => res.ok ? res.json() : null)
+    ]);
+
     try {
-      const r = await fetchAdminCaptainsList();
-      if (!r.ok) {
-        setError(r.error);
+      if (captainsRes.status === 'fulfilled') {
+        const r = captainsRes.value;
+        if (!r.ok) {
+          setError(r.error);
+          setRows([]);
+        } else {
+          setRows(r.data);
+        }
+      } else {
+        setError('网络错误');
         setRows([]);
-        return;
       }
-      setRows(r.data);
+
+      // 更新当前榜单UID集合
+      if (guardRes.status === 'fulfilled' && guardRes.value) {
+        const body = guardRes.value;
+        if (body?.data?.guardUids && Array.isArray(body.data.guardUids)) {
+          setCurrentGuardUids(new Set(body.data.guardUids));
+        }
+      }
     } catch {
       setError('网络错误');
       setRows([]);
