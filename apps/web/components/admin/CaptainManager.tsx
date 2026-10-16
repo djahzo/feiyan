@@ -400,7 +400,7 @@ export default function CaptainManager() {
                     const isExpired = currentGuardUids.size > 0
                       ? !currentGuardUids.has(r.uid)  // 不在当前榜单 = 已过期
                       : r.expireStatus === 'expired';  // 回退到原有逻辑
-                    const rowBg = isExpired ? 'bg-gray-50/80' : '';
+                    const rowBg = isExpired ? 'bg-orange-50/60' : '';
                     return (
                       <tr key={r.id} className={`border-b ${c.line} last:border-0 ${c.hover} ${rowBg}`}>
                         <td className="px-3 py-3">

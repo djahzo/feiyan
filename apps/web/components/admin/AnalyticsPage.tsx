@@ -12,6 +12,8 @@ export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState<TabType>('summary');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentGuardUids, setCurrentGuardUids] = useState<Set<string>>(new Set());
+  const [currentGuardNames, setCurrentGuardNames] = useState<Set<string>>(new Set());
 
   const today = todayIsoDate();
   const [startDate, setStartDate] = useState(addDaysIso(today, -90));
@@ -28,6 +30,19 @@ export default function AnalyticsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+
+    // 并行获取当前大航海榜单
+    const guardPromise = fetch('/api/admin/captains/current-guard-list', { credentials: 'include' })
+      .then(res => res.ok ? res.json() : null)
+      .then(body => {
+        if (body?.data?.guardUids) {
+          setCurrentGuardUids(new Set(body.data.guardUids));
+        }
+        if (body?.data?.guardNames) {
+          setCurrentGuardNames(new Set(body.data.guardNames));
+        }
+      })
+      .catch(() => {}); // 失败不影响主流程
 
     try {
       if (activeTab === 'summary') {
@@ -199,20 +214,24 @@ export default function AnalyticsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {summaryData.topScanFrequency.map((d, idx) => (
-                      <tr key={d.roleName} className="border-b border-[#f6f7f8]">
-                        <td className="py-2 text-[#9499a0]">#{idx + 1}</td>
-                        <td className="py-2 font-medium">{d.roleName}</td>
-                        <td className="py-2 font-bold text-[#fb7299]">{d.totalCount}</td>
-                        <td className="py-2 text-pink-600">{d.scanCount}</td>
-                        <td className="py-2 text-blue-600">{d.groupCount}</td>
-                        <td className="py-2 text-[#9499a0]">
-                          {d.avgDaysInterval != null ? `${d.avgDaysInterval} 天/次` : '-'}
-                        </td>
-                        <td className="py-2 text-[#61666d]">{d.lastHostingDate || '-'}</td>
-                        <td className="py-2 text-[#9499a0]">{d.daysSinceLastHosting ?? '-'}</td>
-                      </tr>
-                    ))}
+                    {summaryData.topScanFrequency.map((d, idx) => {
+                      const isExpired = currentGuardNames.size > 0 && !currentGuardNames.has(d.roleName);
+                      const rowBg = isExpired ? 'bg-orange-50/60' : '';
+                      return (
+                        <tr key={d.roleName} className={`border-b border-[#f6f7f8] ${rowBg}`}>
+                          <td className="py-2 text-[#9499a0]">#{idx + 1}</td>
+                          <td className="py-2 font-medium">{d.roleName}</td>
+                          <td className="py-2 font-bold text-[#fb7299]">{d.totalCount}</td>
+                          <td className="py-2 text-pink-600">{d.scanCount}</td>
+                          <td className="py-2 text-blue-600">{d.groupCount}</td>
+                          <td className="py-2 text-[#9499a0]">
+                            {d.avgDaysInterval != null ? `${d.avgDaysInterval} 天/次` : '-'}
+                          </td>
+                          <td className="py-2 text-[#61666d]">{d.lastHostingDate || '-'}</td>
+                          <td className="py-2 text-[#9499a0]">{d.daysSinceLastHosting ?? '-'}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -249,19 +268,23 @@ export default function AnalyticsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedData.map((d) => (
-                      <tr key={d.roleName} className="border-b border-[#f6f7f8]">
-                        <td className="py-2 font-medium">{d.roleName}</td>
-                        <td className="py-2 font-bold text-[#fb7299]">{d.totalCount}</td>
-                        <td className="py-2 text-pink-600">{d.scanCount}</td>
-                        <td className="py-2 text-blue-600">{d.groupCount}</td>
-                        <td className="py-2 text-[#61666d]">{d.lastHostingDate || '-'}</td>
-                        <td className="py-2 text-[#9499a0]">{d.daysSinceLastHosting ?? '-'}</td>
-                        <td className="py-2 text-[#9499a0]">
-                          {d.avgDaysInterval != null ? `${d.avgDaysInterval} 天/次` : '-'}
-                        </td>
-                      </tr>
-                    ))}
+                    {paginatedData.map((d) => {
+                      const isExpired = currentGuardNames.size > 0 && !currentGuardNames.has(d.roleName);
+                      const rowBg = isExpired ? 'bg-orange-50/60' : '';
+                      return (
+                        <tr key={d.roleName} className={`border-b border-[#f6f7f8] ${rowBg}`}>
+                          <td className="py-2 font-medium">{d.roleName}</td>
+                          <td className="py-2 font-bold text-[#fb7299]">{d.totalCount}</td>
+                          <td className="py-2 text-pink-600">{d.scanCount}</td>
+                          <td className="py-2 text-blue-600">{d.groupCount}</td>
+                          <td className="py-2 text-[#61666d]">{d.lastHostingDate || '-'}</td>
+                          <td className="py-2 text-[#9499a0]">{d.daysSinceLastHosting ?? '-'}</td>
+                          <td className="py-2 text-[#9499a0]">
+                            {d.avgDaysInterval != null ? `${d.avgDaysInterval} 天/次` : '-'}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
