@@ -356,7 +356,20 @@ export default function AnalyticsPage() {
                         <td className="py-2">{d.totalCount}</td>
                         <td className="py-2 text-pink-600">{d.scanCount}</td>
                         <td className="py-2 text-blue-600">{d.groupCount}</td>
-                        <td className="py-2 text-xs text-[#9499a0]">{d.roleNames.join(', ')}</td>
+                        <td className="py-2 text-xs text-[#9499a0]">
+                          {d.roleNames.map((name, idx) => {
+                            const isExpired = currentGuardNames.size > 0 && !currentGuardNames.has(name);
+                            return (
+                              <span
+                                key={idx}
+                                className={isExpired ? 'inline-block rounded bg-orange-50 px-1 py-0.5 text-orange-600' : ''}
+                              >
+                                {name}
+                                {idx < d.roleNames.length - 1 ? ', ' : ''}
+                              </span>
+                            );
+                          })}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

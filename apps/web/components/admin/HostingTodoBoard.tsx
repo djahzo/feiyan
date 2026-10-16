@@ -154,6 +154,11 @@ const MIME_CAPTAIN = 'application/x-feiyan-hosting-captain';
 export default function HostingTodoBoard() {
   const [rows, setRows] = useState<HostingTodoDto[]>([]);
   const [captains, setCaptains] = useState<CaptainApiDto[]>([]);
+  const [currentGuardUids, setCurrentGuardUids] = useState<Set<string>>(new Set());
+  const [expiredCaptainsInFuture, setExpiredCaptainsInFuture] = useState<Set<string>>(new Set());
+  const [suppressedExpiredWarnings, setSuppressedExpiredWarnings] = useState<Set<string>>(new Set());
+  const [showExpiredWarning, setShowExpiredWarning] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -192,7 +197,12 @@ export default function HostingTodoBoard() {
     if (!silent) setLoading(true);
     setError(null);
     try {
-      const [todoRes, capR] = await Promise.all([fetch('/api/admin/hosting-todos', { cache: 'no-store' }), fetchAdminCaptainsList()]);
+      const [todoRes, capR, guardRes] = await Promise.all([
+        fetch('/api/admin/hosting-todos', { cache: 'no-store' }),
+        fetchAdminCaptainsList(),
+        fetch('/api/admin/captains/current-guard-list', { credentials: 'include' }).then(res => res.ok ? res.json() : null)
+      ]);
+
       const todoBody = (await todoRes.json()) as { data?: HostingTodoDto[]; leaveDates?: string[]; error?: string };
       if (!todoRes.ok) {
         setError(todoBody.error || '任务板加载失败');
@@ -209,11 +219,47 @@ export default function HostingTodoBoard() {
             : [],
         );
       }
+
       if (!capR.ok) {
         if (todoRes.ok) setError(capR.error);
         setCaptains([]);
       } else {
         setCaptains(capR.data.map(normalizeCaptain).filter((c): c is CaptainApiDto => c != null));
+      }
+
+      // 更新当前榜单UID并检测未来排期中的非舰长
+      if (guardRes?.data?.guardUids) {
+        const uids = new Set(guardRes.data.guardUids as string[]);
+        setCurrentGuardUids(uids);
+
+        const today = todayIsoDate();
+        const captainsMap = new Map<string, CaptainApiDto>();
+        if (capR.ok) {
+          capR.data.forEach((c: any) => {
+            const captain = normalizeCaptain(c);
+            if (captain) captainsMap.set(captainScheduleName(captain), captain);
+          });
+        }
+
+        // 检测未来排期中的非舰长
+        if (todoRes.ok && Array.isArray(todoBody.data)) {
+          const expiredInFuture = new Set<string>();
+          todoBody.data.forEach((todo: any) => {
+            if (todo.todoDate > today) {
+              const captain = captainsMap.get(todo.roleName);
+              if (captain && !uids.has(captain.uid)) {
+                expiredInFuture.add(todo.roleName);
+              }
+            }
+          });
+          setExpiredCaptainsInFuture(expiredInFuture);
+
+          // 如果有非舰长且未被抑制，显示警告
+          const unsuppressed = Array.from(expiredInFuture).filter(name => !suppressedExpiredWarnings.has(name));
+          if (unsuppressed.length > 0) {
+            setShowExpiredWarning(true);
+          }
+        }
       }
     } catch {
       setError('网络错误');
@@ -223,7 +269,7 @@ export default function HostingTodoBoard() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, []);
+  }, [suppressedExpiredWarnings]);
 
   const submitLeave = useCallback(async (date: string, onLeave: boolean): Promise<boolean> => {
     setBusy(true);
@@ -663,6 +709,10 @@ export default function HostingTodoBoard() {
 
   function renderMissionCard(item: HostingTodoDto, date: string) {
     const ht = isHostType(item.hostType) ? item.hostType : DEFAULT_HOST_TYPE;
+    // 检查是否是非舰长
+    const captain = captains.find(c => captainScheduleName(c) === item.roleName);
+    const isExpired = captain && currentGuardUids.size > 0 && !currentGuardUids.has(captain.uid);
+
     return (
       <li
         key={item.id}
@@ -697,7 +747,19 @@ export default function HostingTodoBoard() {
         className={`${th.card} ${th.cardAccent} rounded-r-md px-3.5 py-3 pl-3.5 sm:px-4 ${busy ? 'opacity-50' : ''}`}>
         <div className="flex flex-col gap-2.5">
           <div className="flex items-start justify-between gap-3">
-            <p className="min-w-0 flex-1 font-mono text-base font-semibold leading-snug tracking-tight text-[#ece8df] sm:text-lg">{item.roleName}</p>
+            <div className="min-w-0 flex-1 flex items-center gap-2">
+              <p className={`font-mono text-base font-semibold leading-snug tracking-tight sm:text-lg ${isExpired ? 'text-red-400' : 'text-[#ece8df]'}`}>
+                {item.roleName}
+              </p>
+              {isExpired && (
+                <span
+                  className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-red-600 text-white text-xs font-bold cursor-help"
+                  title="该舰长已过期"
+                >
+                  !
+                </span>
+              )}
+            </div>
             <div className="flex shrink-0 items-center gap-2.5">
               {item.stuckTask ? (
                 <span
@@ -745,6 +807,48 @@ export default function HostingTodoBoard() {
 
   return (
     <div className={`relative flex h-full min-h-0 flex-1 flex-col overflow-hidden ${th.page}`}>
+      {/* 过期舰长警告弹窗 */}
+      {showExpiredWarning && expiredCaptainsInFuture.size > 0 && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" onClick={() => setShowExpiredWarning(false)} />
+          <div className={`fixed left-1/2 top-1/2 z-50 w-[min(90vw,480px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border ${th.line} ${th.panel} p-6 shadow-2xl`}>
+            <h2 className={`text-center text-lg font-bold ${th.gold}`}>⚠️ 未来排期提醒</h2>
+            <p className={`mt-3 text-sm leading-relaxed ${th.muted}`}>
+              以下非舰长仍在未来排期计划中：
+            </p>
+            <ul className="mt-3 max-h-48 overflow-y-auto space-y-2">
+              {Array.from(expiredCaptainsInFuture).filter(name => !suppressedExpiredWarnings.has(name)).map(name => (
+                <li key={name} className="flex items-center justify-between gap-3 rounded bg-red-950/20 px-3 py-2">
+                  <span className="text-sm text-red-300">{name}</span>
+                  <button
+                    type="button"
+                    className="text-xs text-[#9499a0] hover:text-[#d4cfc4]"
+                    onClick={() => {
+                      setSuppressedExpiredWarnings(prev => new Set([...prev, name]));
+                      const remaining = Array.from(expiredCaptainsInFuture).filter(n => n !== name && !suppressedExpiredWarnings.has(n));
+                      if (remaining.length === 0) {
+                        setShowExpiredWarning(false);
+                      }
+                    }}
+                  >
+                    不再提示
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-5 flex justify-center">
+              <button
+                type="button"
+                className={`min-w-[120px] ${th.btn}`}
+                onClick={() => setShowExpiredWarning(false)}
+              >
+                知道了
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {leaveDialogDate !== null ? (
         <>
           <button
