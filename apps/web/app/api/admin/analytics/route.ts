@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    const todos = await listHostingTodos();
+    const [todos, captains] = await Promise.all([listHostingTodos(), listCaptains()]);
 
     // 默认时间范围：最近90天
     const today = todayIsoDate();
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     const end = endDate || today;
 
     if (type === 'captain-frequency') {
-      const data = analyzeCaptainFrequency(todos, start, end);
+      const data = analyzeCaptainFrequency(todos, captains, start, end);
 
       if (format === 'csv') {
         const csv = exportToCsv(data);
@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (type === 'summary') {
-      const data = getTimeRangeStats(todos, start, end);
+      const data = getTimeRangeStats(todos, captains, start, end);
       return NextResponse.json({ data });
     }
 

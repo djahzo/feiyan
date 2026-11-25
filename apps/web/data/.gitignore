@@ -1,3 +1,7 @@
 *.db
 *.db-journal
+# 数据库备份（site.db.bak-* 等），不要进仓库
+*.bak
+*.bak-*
+site.db*
 uploads/

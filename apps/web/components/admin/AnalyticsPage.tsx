@@ -176,7 +176,13 @@ export default function AnalyticsPage() {
               </div>
               <div className={c.card}>
                 <p className={`text-sm ${c.sub}`}>参与舰长数</p>
-                <p className="mt-2 text-3xl font-bold">{summaryData.captainFrequencies.length}</p>
+                <p className="mt-2 text-3xl font-bold">
+                  {summaryData.participatingCaptains}
+                  <span className="ml-1 text-base font-normal text-[#9499a0]">/ {summaryData.totalCaptains}</span>
+                </p>
+                <p className="mt-1 text-xs text-[#9499a0]">
+                  本期未托管 {summaryData.totalCaptains - summaryData.participatingCaptains} 位
+                </p>
               </div>
             </div>
 
@@ -197,8 +203,36 @@ export default function AnalyticsPage() {
             </div>
 
             <div className={c.card}>
+              <h3 className="text-lg font-semibold">数据口径核对</h3>
+              <p className="mt-1 text-xs text-[#9499a0]">
+                以「舰长管理」{summaryData.totalCaptains} 位舰长为主表，全部列出，0 次也保留
+              </p>
+              <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
+                <div>
+                  <p className={c.sub}>历史从未托管</p>
+                  <p className="mt-1 text-2xl font-bold text-orange-500">{summaryData.neverHostedCaptains} 位</p>
+                </div>
+                <div>
+                  <p className={c.sub}>挂不上舰长的记录</p>
+                  <p className="mt-1 text-2xl font-bold text-red-500">{summaryData.unlinkedTodoCount} 条</p>
+                  {summaryData.unlinkedNames.length > 0 && (
+                    <p className="mt-1 text-xs text-[#9499a0] break-all">
+                      {summaryData.unlinkedNames.join('、')}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <p className={c.sub}>本期托管次数</p>
+                  <p className="mt-1 text-2xl font-bold">{summaryData.totalTodos} 次</p>
+                </div>
+              </div>
+            </div>
+
+            <div className={c.card}>
               <h3 className="text-lg font-semibold">扫号频率榜单</h3>
-              <p className="mt-1 text-xs text-[#9499a0]">按历史累计托管次数降序，同频率按距今最久排序（共 {summaryData.topScanFrequency.length} 位）</p>
+              <p className="mt-1 text-xs text-[#9499a0]">
+                舰长管理全部 {summaryData.totalCaptains} 位（含 0 次），按历史累计托管次数降序，同频率按距今最久排序
+              </p>
               <div className="mt-4 overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="border-b border-[#e3e5e7]">
@@ -215,13 +249,27 @@ export default function AnalyticsPage() {
                   </thead>
                   <tbody>
                     {summaryData.topScanFrequency.map((d, idx) => {
-                      const isExpired = currentGuardNames.size > 0 && !currentGuardNames.has(d.roleName);
-                      const rowBg = isExpired ? 'bg-orange-50/60' : '';
+                      const isExpired = d.linked && currentGuardNames.size > 0 && !currentGuardNames.has(d.roleName);
+                      const rowBg = !d.linked ? 'bg-red-50/60' : isExpired ? 'bg-orange-50/60' : '';
                       return (
-                        <tr key={d.roleName} className={`border-b border-[#f6f7f8] ${rowBg}`}>
+                        <tr key={`${d.roleName}-${idx}`} className={`border-b border-[#f6f7f8] ${rowBg}`}>
                           <td className="py-2 text-[#9499a0]">#{idx + 1}</td>
-                          <td className="py-2 font-medium">{d.roleName}</td>
-                          <td className="py-2 font-bold text-[#fb7299]">{d.totalCount}</td>
+                          <td className="py-2 font-medium">
+                            {d.roleName}
+                            {!d.linked && (
+                              <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-xs font-normal text-red-600">
+                                未关联舰长
+                              </span>
+                            )}
+                            {d.linked && d.neverHosted && (
+                              <span className="ml-2 rounded bg-[#f6f7f8] px-1.5 py-0.5 text-xs font-normal text-[#9499a0]">
+                                从未托管
+                              </span>
+                            )}
+                          </td>
+                          <td className={`py-2 font-bold ${d.totalCount > 0 ? 'text-[#fb7299]' : 'text-[#c9ccd0]'}`}>
+                            {d.totalCount}
+                          </td>
                           <td className="py-2 text-pink-600">{d.scanCount}</td>
                           <td className="py-2 text-blue-600">{d.groupCount}</td>
                           <td className="py-2 text-[#9499a0]">
@@ -246,7 +294,7 @@ export default function AnalyticsPage() {
                 <div>
                   <h3 className="text-lg font-semibold">舰长扫号全表</h3>
                   <p className="mt-1 text-xs text-[#9499a0]">
-                    共 {captainFreqData.length} 位舰长 · 当前显示第 {currentPage}/{totalPages} 页
+                    舰长管理全部 {captainFreqData.length} 位（含 0 次，按舰长表列出）· 当前显示第 {currentPage}/{totalPages} 页
                   </p>
                 </div>
                 <button type="button" onClick={() => void exportCsv('captain-frequency')} className={c.btnPrimary}>
@@ -259,28 +307,46 @@ export default function AnalyticsPage() {
                   <thead className="border-b border-[#e3e5e7]">
                     <tr className="text-left">
                       <th className="pb-2 font-medium text-[#61666d]">舰长</th>
+                      <th className="pb-2 font-medium text-[#61666d]">UID</th>
+                      <th className="pb-2 font-medium text-[#61666d]">本期次数</th>
                       <th className="pb-2 font-medium text-[#61666d]">累计次数</th>
                       <th className="pb-2 font-medium text-[#61666d]">扫号</th>
                       <th className="pb-2 font-medium text-[#61666d]">组排</th>
                       <th className="pb-2 font-medium text-[#61666d]">最近托管日期</th>
                       <th className="pb-2 font-medium text-[#61666d]">距今天数</th>
                       <th className="pb-2 font-medium text-[#61666d]">平均间隔</th>
+                      <th className="pb-2 font-medium text-[#61666d]">状态</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedData.map((d) => {
-                      const isExpired = currentGuardNames.size > 0 && !currentGuardNames.has(d.roleName);
-                      const rowBg = isExpired ? 'bg-orange-50/60' : '';
+                    {paginatedData.map((d, idx) => {
+                      const isExpired = d.linked && currentGuardNames.size > 0 && !currentGuardNames.has(d.roleName);
+                      const rowBg = !d.linked ? 'bg-red-50/60' : isExpired ? 'bg-orange-50/60' : '';
                       return (
-                        <tr key={d.roleName} className={`border-b border-[#f6f7f8] ${rowBg}`}>
+                        <tr key={`${d.captainId ?? d.roleName}-${idx}`} className={`border-b border-[#f6f7f8] ${rowBg}`}>
                           <td className="py-2 font-medium">{d.roleName}</td>
-                          <td className="py-2 font-bold text-[#fb7299]">{d.totalCount}</td>
+                          <td className="py-2 text-xs text-[#9499a0]">{d.uid ?? '-'}</td>
+                          <td className={`py-2 font-bold ${d.totalCount > 0 ? 'text-[#fb7299]' : 'text-[#c9ccd0]'}`}>
+                            {d.totalCount}
+                          </td>
+                          <td className="py-2 text-[#61666d]">{d.allTimeCount}</td>
                           <td className="py-2 text-pink-600">{d.scanCount}</td>
                           <td className="py-2 text-blue-600">{d.groupCount}</td>
                           <td className="py-2 text-[#61666d]">{d.lastHostingDate || '-'}</td>
                           <td className="py-2 text-[#9499a0]">{d.daysSinceLastHosting ?? '-'}</td>
                           <td className="py-2 text-[#9499a0]">
                             {d.avgDaysInterval != null ? `${d.avgDaysInterval} 天/次` : '-'}
+                          </td>
+                          <td className="py-2 text-xs">
+                            {!d.linked ? (
+                              <span className="text-red-600">未关联舰长</span>
+                            ) : d.neverHosted ? (
+                              <span className="text-[#9499a0]">从未托管</span>
+                            ) : isExpired ? (
+                              <span className="text-orange-600">已过期</span>
+                            ) : (
+                              <span className="text-[#9499a0]">正常</span>
+                            )}
                           </td>
                         </tr>
                       );
