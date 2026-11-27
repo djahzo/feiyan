@@ -10,9 +10,10 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     const [captains, todos] = await Promise.all([listCaptains(), listHostingTodos()]);
+    const streamerUid = (process.env.BILIBILI_UID || '').trim();
     const today = todayIsoDate();
     const upcoming = todos.filter(todo => todo.todo_date >= today);
-    const data: PetCaptain[] = captains.map(captain => {
+    const data: PetCaptain[] = captains.filter(captain => captain.uid !== streamerUid).map(captain => {
       const name = captainScheduleName({
         id: captain.id,
         uid: captain.uid,
